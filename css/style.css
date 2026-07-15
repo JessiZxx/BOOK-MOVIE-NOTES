@@ -411,8 +411,9 @@ img { max-width: 100%; height: auto; display: block; }
   margin: 0 auto 24px; opacity: 0.5;
 }
 .guide-hero-desc {
-  font-size: 1.05rem; color: var(--color-ink-light);
-  line-height: 2.2; max-width: 420px; margin: 0 auto 32px;
+  font-size: 1.15rem; color: var(--color-ink-light);
+  line-height: 1.8; max-width: 420px; margin: 0 auto 32px;
+  letter-spacing: 2px;
 }
 .btn-lg { padding: 14px 36px; font-size: 1.05rem; letter-spacing: 3px; }
 
