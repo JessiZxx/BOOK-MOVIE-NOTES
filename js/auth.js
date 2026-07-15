@@ -21,10 +21,7 @@ const Auth = {
     console.log('[Auth] signUp 开始:', email);
     const { data, error } = await this.client.auth.signUp({
       email,
-      password,
-      options: {
-        emailRedirectTo: window.location.origin
-      }
+      password
     });
     if (error) {
       console.error('[Auth] signUp 失败:', error);
