@@ -1,11 +1,13 @@
 /* ============================================================
-   ui.js - UI 渲染与事件处理（档案袋+搜索+面包屑+导览）
+   ui.js - UI 渲染与事件处理
+   交互：面包屑导航 / 导览页 / 自定义分类 / 档案袋卡片
    ============================================================ */
 
 const UI = {
   currentView: 'dashboard',
-  currentType: null,
+  currentType: null,       // 'book' | 'movie' | 'custom'
   currentFolderId: null,
+  currentFolderName: null,  // 当前分类名（用于面包屑）
   currentEntryId: null,
   currentImagePath: null,
   pendingImageFile: null,
@@ -46,9 +48,7 @@ const UI = {
 
       folderModal: qs('#folder-modal'), folderForm: qs('#folder-form'),
       folderName: qs('#folder-name'), folderId: qs('#folder-id'),
-      folderType: qs('#folder-type'), folderTypeGroup: qs('#folder-type-group'),
       folderModalTitle: qs('#folder-modal-title'),
-      typeBtns: document.querySelectorAll('.type-btn'),
       btnCancelFolder: qs('#btn-cancel-folder'),
       loadingOverlay: qs('#loading-overlay'),
     };
@@ -66,10 +66,6 @@ const UI = {
     this.els.btnAddCategory.addEventListener('click', () => this.openCategoryModal());
     this.els.folderForm.addEventListener('submit', e => this.handleFolderSubmit(e));
     this.els.btnCancelFolder.addEventListener('click', () => this.closeFolderModal());
-    this.els.typeBtns.forEach(b => b.addEventListener('click', () => {
-      this.els.typeBtns.forEach(t => t.classList.toggle('active', t === b));
-      this.els.folderType.value = b.dataset.type;
-    }));
     this.els.btnAddEntry.addEventListener('click', () => this.openEntryForm(null));
     this.els.entryForm.addEventListener('submit', e => this.handleEntrySubmit(e));
     this.els.btnDeleteEntry.addEventListener('click', () => this.handleDeleteEntry());
@@ -87,6 +83,18 @@ const UI = {
         this.navigateTo(item.dataset.view);
       }
     });
+  },
+
+  /* ==================== Toast 提示 ==================== */
+  toast(msg, type) {
+    const existing = document.querySelector('.ui-toast');
+    if (existing) existing.remove();
+    const el = document.createElement('div');
+    el.className = `ui-toast ${type || ''}`;
+    el.textContent = msg;
+    document.body.appendChild(el);
+    requestAnimationFrame(() => el.classList.add('show'));
+    setTimeout(() => { el.classList.remove('show'); setTimeout(() => el.remove(), 300); }, 2200);
   },
 
   /* ==================== 认证 ==================== */
@@ -165,28 +173,37 @@ const UI = {
       this.showView('guide');
       this.updateBreadcrumb([{ label: '书影', view: 'guide' }]);
     } else if (view === 'dashboard') {
-      this.currentType = null; this.currentFolderId = null; this.currentEntryId = null;
+      this.currentType = null; this.currentFolderId = null; this.currentFolderName = null; this.currentEntryId = null;
       this.showView('dashboard'); this.loadDashboard();
       this.updateBreadcrumb([{ label: '书影', view: 'guide' }, { label: '我的书房', view: 'dashboard' }]);
     } else if (view === 'entries') {
-      // 面包屑点击时可能没有 param，使用已存储的 currentFolderId / currentType
       const folderId = param?.folderId || this.currentFolderId;
       const type = param?.type || this.currentType;
-      if (!folderId || !type) { this.navigateTo('dashboard'); return; }
-      this.currentFolderId = folderId; this.currentType = type; this.currentEntryId = null;
+      const name = param?.name || this.currentFolderName;
+      if (!folderId) { this.navigateTo('dashboard'); return; }
+      this.currentFolderId = folderId; this.currentType = type || 'custom'; this.currentFolderName = name; this.currentEntryId = null;
       this.showView('entries'); this.loadEntries();
-      const label = this.currentType === 'book' ? 'Books' : 'Movies';
-      this.updateBreadcrumb([{ label: '书影', view: 'guide' }, { label: '我的书房', view: 'dashboard' }, { label, view: 'entries' }]);
+      const label = name || (type === 'book' ? 'Books' : type === 'movie' ? 'Movies' : '分类');
+      this.updateBreadcrumb([
+        { label: '书影', view: 'guide' },
+        { label: '我的书房', view: 'dashboard' },
+        { label, view: 'entries' }
+      ]);
     } else if (view === 'entry-detail') {
       this.currentEntryId = param;
       this.showView('entry-detail'); this.loadEntryForm(param);
-      const label = this.currentType === 'book' ? 'Books' : 'Movies';
-      this.updateBreadcrumb([{ label: '书影', view: 'guide' }, { label: '我的书房', view: 'dashboard' }, { label, view: 'entries' }, { label: '编辑', view: 'entry-detail' }]);
+      const label = this.currentFolderName || (this.currentType === 'book' ? 'Books' : this.currentType === 'movie' ? 'Movies' : '分类');
+      this.updateBreadcrumb([
+        { label: '书影', view: 'guide' },
+        { label: '我的书房', view: 'dashboard' },
+        { label, view: 'entries' },
+        { label: '编辑', view: 'entry-detail' }
+      ]);
     }
   },
 
   goBack() {
-    if (this.currentView === 'entry-detail') this.navigateTo('entries', { folderId: this.currentFolderId, type: this.currentType });
+    if (this.currentView === 'entry-detail') this.navigateTo('entries', { folderId: this.currentFolderId, type: this.currentType, name: this.currentFolderName });
     else if (this.currentView === 'entries') this.navigateTo('dashboard');
     else if (this.currentView === 'dashboard') this.navigateTo('guide');
   },
@@ -196,43 +213,82 @@ const UI = {
     this.showLoading();
     try {
       const folders = await DB.getAllFolders();
-      // 如果文件夹有 type 字段则按类型匹配，否则只按名称匹配（兼容旧数据）
-      const findFolder = (type) => {
+      // 内置分类
+      const findBuiltin = (type) => {
         const byType = folders.find(f => f.type === type);
         if (byType) return byType;
-        const name = type === 'book' ? 'Books' : 'Movies';
-        return folders.find(f => f.name === name);
+        return folders.find(f => f.name === (type === 'book' ? 'Books' : 'Movies'));
       };
-      const cats = [
+      const builtins = [
         { id: '_book', name: 'Books', type: 'book', icon: '📚', isBuiltin: true },
         { id: '_movie', name: 'Movies', type: 'movie', icon: '🎬', isBuiltin: true }
       ];
-      for (const cat of cats) {
-        const f = findFolder(cat.type);
+      for (const cat of builtins) {
+        const f = findBuiltin(cat.type);
         cat.count = f ? await DB.getEntryCount(f.id) : 0;
         cat.folderId = f ? f.id : null;
       }
-      this.renderDashboard(cats);
-    } catch (err) { console.error(err); alert('加载失败：' + err.message); }
+      // 自定义分类：排除内置的 Books/Movies（按名称+类型精确匹配）
+      const customFolders = folders.filter(f => {
+        if (f.type === 'book' && f.name === 'Books') return false;
+        if (f.type === 'movie' && f.name === 'Movies') return false;
+        return true;
+      });
+      const customCats = await Promise.all(customFolders.map(async f => ({
+        id: f.id, name: f.name, type: f.type || 'custom', icon: '📂',
+        isBuiltin: false, folderId: f.id, count: await DB.getEntryCount(f.id)
+      })));
+      this.renderDashboard([...builtins, ...customCats]);
+    } catch (err) { console.error(err); this.toast('加载失败：' + err.message, 'error'); }
     finally { this.hideLoading(); }
   },
 
   renderDashboard(cats) {
-    this.els.dashboardCategories.innerHTML = cats.map(c => `
-      <div class="category-card" data-id="${c.id}" data-type="${c.type}" data-folder="${c.folderId || ''}">
-        <div class="category-card-tab">${c.type === 'book' ? 'BOOKS' : 'MOVIES'}</div>
-        <div class="category-card-icon">${c.icon}</div>
-        <div class="category-card-title">${this.esc(c.name)}</div>
-        <div class="category-card-count">${c.count || 0} 条记录</div>
-      </div>
-    `).join('');
+    this.els.dashboardCategories.innerHTML = cats.map(c => {
+      const tabLabel = c.isBuiltin ? (c.type === 'book' ? 'BOOKS' : 'MOVIES') : 'CUSTOM';
+      const tabClass = c.isBuiltin ? '' : 'custom';
+      return `
+        <div class="category-card" data-id="${c.id}" data-type="${c.type}" data-folder="${c.folderId || ''}" data-name="${this.esc(c.name)}">
+          <div class="category-card-tab ${tabClass}">${tabLabel}</div>
+          <div class="category-card-icon">${c.icon}</div>
+          <div class="category-card-title">${this.esc(c.name)}</div>
+          <div class="category-card-count">${c.count || 0} 条记录</div>
+          ${!c.isBuiltin ? `<div class="category-card-actions">
+            <button class="btn-icon edit-folder" data-id="${c.id}" data-name="${this.esc(c.name)}" title="重命名">✎</button>
+            <button class="btn-icon delete-folder" data-id="${c.id}" data-name="${this.esc(c.name)}" title="删除">✕</button>
+          </div>` : ''}
+        </div>
+      `;
+    }).join('');
 
     this.els.dashboardCategories.querySelectorAll('.category-card').forEach(card => {
       card.addEventListener('click', (e) => {
+        // 如果点击了操作按钮则不触发导航
+        if (e.target.closest('.edit-folder') || e.target.closest('.delete-folder')) return;
         const type = card.dataset.type;
         const folderId = card.dataset.folder;
-        if (folderId) { this.navigateTo('entries', { folderId, type }); }
+        const name = card.dataset.name;
+        if (folderId) { this.navigateTo('entries', { folderId, type, name }); }
         else { this.createDefaultFolderAndEnter(type); }
+      });
+    });
+
+    // 编辑按钮
+    this.els.dashboardCategories.querySelectorAll('.edit-folder').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        this.openCategoryModal(btn.dataset.id, btn.dataset.name);
+      });
+    });
+    // 删除按钮
+    this.els.dashboardCategories.querySelectorAll('.delete-folder').forEach(btn => {
+      btn.addEventListener('click', async (e) => {
+        e.stopPropagation();
+        if (!confirm(`确定删除分类「${btn.dataset.name}」及其所有条目？`)) return;
+        this.showLoading();
+        try { await DB.deleteFolder(btn.dataset.id); this.toast('已删除', ''); this.loadDashboard(); }
+        catch (err) { this.toast('删除失败：' + err.message, 'error'); }
+        finally { this.hideLoading(); }
       });
     });
   },
@@ -243,8 +299,8 @@ const UI = {
       const name = type === 'book' ? 'Books' : 'Movies';
       const folder = await DB.createFolder(name, type);
       this.hideLoading();
-      this.navigateTo('entries', { folderId: folder.id, type });
-    } catch (err) { this.hideLoading(); alert('创建失败：' + err.message); }
+      this.navigateTo('entries', { folderId: folder.id, type, name });
+    } catch (err) { this.hideLoading(); this.toast('创建失败：' + err.message, 'error'); }
   },
 
   /* ==================== 分类模态框 ==================== */
@@ -252,9 +308,6 @@ const UI = {
     this.els.folderModalTitle.textContent = id ? '编辑分类' : '新建分类';
     this.els.folderName.value = name || '';
     this.els.folderId.value = id || '';
-    this.els.folderType.value = 'book';
-    this.els.folderTypeGroup.style.display = id ? 'none' : 'block';
-    this.els.typeBtns.forEach(b => b.classList.toggle('active', b.dataset.type === 'book'));
     this.els.folderModal.classList.add('active');
     this.els.folderName.focus();
   },
@@ -263,22 +316,21 @@ const UI = {
     this.els.folderModal.classList.remove('active');
     this.els.folderForm.reset();
     this.els.folderId.value = '';
-    this.els.folderType.value = 'book';
   },
 
   async handleFolderSubmit(e) {
     e.preventDefault();
     const name = this.els.folderName.value.trim();
     const id = this.els.folderId.value;
-    const type = this.els.folderType.value || 'book';
     if (!name) return;
     this.showLoading();
     try {
       if (id) await DB.updateFolder(id, name);
-      else await DB.createFolder(name, type);
+      else await DB.createFolder(name, 'custom');
       this.closeFolderModal();
+      this.toast(id ? '分类已更新' : '分类已创建', '');
       this.loadDashboard();
-    } catch (err) { alert('保存失败：' + err.message); }
+    } catch (err) { this.toast('保存失败：' + err.message, 'error'); }
     finally { this.hideLoading(); }
   },
 
@@ -348,8 +400,9 @@ const UI = {
         rating: 0, notes: description, imageUrl: '', coverUrl: result.cover || '',
         startedDate: null, finishedDate: null
       });
+      this.toast('「' + result.title + '」已添加', '');
       this.loadEntries();
-    } catch (err) { alert('创建失败：' + err.message + '\n\n如果提示字段不存在，请在 Supabase SQL Editor 执行 ALTER TABLE 添加新字段。'); }
+    } catch (err) { this.toast('创建失败：' + err.message, 'error'); }
     finally { this.hideLoading(); }
   },
 
@@ -359,20 +412,21 @@ const UI = {
     try {
       if (!this.currentFolderId) { this.hideLoading(); return; }
       const entries = await DB.getEntries(this.currentFolderId);
-      this.els.entriesTitle.textContent = this.currentType === 'book' ? 'Books' : 'Movies';
+      this.els.entriesTitle.textContent = this.currentFolderName || (this.currentType === 'book' ? 'Books' : this.currentType === 'movie' ? 'Movies' : '条目');
       this.els.entriesList.innerHTML = '';
       if (entries.length === 0) {
         this.els.entriesList.style.display = 'none'; this.els.entriesEmpty.style.display = 'block';
-        this.els.searchInput.placeholder = this.currentType === 'book' ? '搜索书籍...' : '搜索电影...';
+        this.els.searchInput.placeholder = '搜索书籍 / 电影...';
         return;
       }
       this.els.entriesList.style.display = ''; this.els.entriesEmpty.style.display = 'none';
+      const tabLabel = this.currentType === 'book' ? 'BOOK' : this.currentType === 'movie' ? 'FILM' : '';
       entries.forEach(entry => {
         const coverUrl = entry.cover_url || entry.image_url || '';
         const card = document.createElement('div');
         card.className = 'archive-card';
         card.innerHTML = `
-          <div class="archive-card-tab">${this.currentType === 'book' ? 'BOOK' : 'FILM'}</div>
+          ${tabLabel ? `<div class="archive-card-tab">${tabLabel}</div>` : ''}
           <div class="archive-card-cover">
             ${coverUrl ? `<img src="${this.esc(coverUrl)}" alt="" loading="lazy">` : '<div class="archive-card-cover-placeholder">📖</div>'}
           </div>
@@ -387,7 +441,7 @@ const UI = {
         card.addEventListener('click', () => this.navigateTo('entry-detail', entry.id));
         this.els.entriesList.appendChild(card);
       });
-    } catch (err) { console.error(err); alert('加载失败：' + err.message); }
+    } catch (err) { console.error(err); this.toast('加载失败：' + err.message, 'error'); }
     finally { this.hideLoading(); }
   },
 
@@ -413,7 +467,7 @@ const UI = {
           const imgUrl = data.cover_url || data.image_url || '';
           if (imgUrl) { this.currentImagePath = imgUrl; this.els.imagePreview.style.display = 'block'; this.els.imagePreviewImg.src = imgUrl; this.els.imageUploadBtn.style.display = 'none'; }
         }
-      } catch (err) { alert('加载失败：' + err.message); }
+      } catch (err) { this.toast('加载失败：' + err.message, 'error'); }
       finally { this.hideLoading(); }
     } else { this.els.entryFormTitle.textContent = '新建条目'; }
   },
@@ -442,10 +496,10 @@ const UI = {
         rating: parseInt(this.els.entryRating.value) || 0, notes: this.els.entryNotes.value || '',
         imageUrl, coverUrl, startedDate: this.els.entryStarted.value || null, finishedDate: this.els.entryFinished.value || null
       };
-      if (this.currentEntryId) await DB.updateEntry(this.currentEntryId, d);
-      else await DB.createEntry(d);
-      this.navigateTo('entries', { folderId: this.currentFolderId, type: this.currentType });
-    } catch (err) { alert('保存失败：' + err.message + '\n\n如需新字段请执行 ALTER TABLE 添加 author/cover_url/started_date/finished_date'); }
+      if (this.currentEntryId) { await DB.updateEntry(this.currentEntryId, d); this.toast('已保存', ''); }
+      else { await DB.createEntry(d); this.toast('条目已创建', ''); }
+      this.navigateTo('entries', { folderId: this.currentFolderId, type: this.currentType, name: this.currentFolderName });
+    } catch (err) { this.toast('保存失败：' + err.message, 'error'); }
     finally { this.hideLoading(); }
   },
 
@@ -453,8 +507,8 @@ const UI = {
     if (!this.currentEntryId) return;
     if (!confirm('确定删除？')) return;
     this.showLoading();
-    try { await DB.deleteEntry(this.currentEntryId); this.navigateTo('entries', { folderId: this.currentFolderId, type: this.currentType }); }
-    catch (err) { alert('删除失败：' + err.message); }
+    try { await DB.deleteEntry(this.currentEntryId); this.toast('已删除', ''); this.navigateTo('entries', { folderId: this.currentFolderId, type: this.currentType, name: this.currentFolderName }); }
+    catch (err) { this.toast('删除失败：' + err.message, 'error'); }
     finally { this.hideLoading(); }
   },
 
@@ -468,7 +522,7 @@ const UI = {
   /* ==================== 图片 ==================== */
   handleImageSelect(e) {
     const file = e.target.files[0]; if (!file) return;
-    if (!file.type.startsWith('image/')) { alert('请选择图片文件'); return; }
+    if (!file.type.startsWith('image/')) { this.toast('请选择图片文件', 'error'); return; }
     this.pendingImageFile = file; this.currentImagePath = null;
     const reader = new FileReader();
     reader.onload = ev => { this.els.imagePreview.style.display = 'block'; this.els.imagePreviewImg.src = ev.target.result; this.els.imageUploadBtn.style.display = 'none'; };

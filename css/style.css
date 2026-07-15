@@ -449,6 +449,20 @@ img { max-width: 100%; height: auto; display: block; }
 .type-btn.active { border-color: var(--color-vermilion); color: var(--color-vermilion); background: var(--color-paper-light); }
 .type-btn:hover { border-color: var(--color-vermilion); }
 
+/* 自定义分类卡片标签 */
+.category-card-tab.custom { background: var(--color-ink-faint); }
+
+/* Toast 提示 */
+.ui-toast {
+  position: fixed; bottom: 40px; left: 50%; transform: translateX(-50%) translateY(20px);
+  background: var(--color-ink); color: var(--color-paper-light);
+  padding: 12px 28px; border-radius: 6px; font-size: 0.9rem;
+  letter-spacing: 1px; z-index: 300; opacity: 0; transition: all 0.3s ease;
+  box-shadow: 0 4px 16px rgba(42,35,32,0.2);
+}
+.ui-toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+.ui-toast.error { background: var(--color-vermilion); }
+
 /* ============================================================
    加载遮罩
    ============================================================ */

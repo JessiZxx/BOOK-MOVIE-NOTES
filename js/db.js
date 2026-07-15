@@ -1,42 +1,24 @@
 /* ============================================================
    db.js - 数据库 CRUD 操作模块
+   策略：先尝试写入全部字段，失败则自动回退到基础字段
    ============================================================ */
 
 const DB = {
   client: null,
-  _hasNewColumns: null,
 
   init(client) { this.client = client; },
 
-  /** 检测新字段是否存在 */
-  async checkNewColumns() {
-    if (this._hasNewColumns !== null) return this._hasNewColumns;
-    try {
-      const { data: userData } = await this.client.auth.getUser();
-      const { error } = await this.client.from('entries').insert({
-        folder_id: '00000000-0000-0000-0000-000000000000',
-        user_id: userData.user.id,
-        title: '__test__',
-        author: '',
-        cover_url: '',
-        started_date: null,
-        finished_date: null
-      });
-      this._hasNewColumns = !error;
-      if (!error) {
-        // 清理测试数据
-        await this.client.from('entries').delete().eq('title', '__test__');
-      }
-    } catch (e) {
-      this._hasNewColumns = false;
-    }
-    return this._hasNewColumns;
+  /** 获取当前用户 ID */
+  async _userId() {
+    const { data } = await this.client.auth.getUser();
+    return data.user.id;
   },
 
   /* ==================== 分类 ==================== */
   async getFolders(type) {
-    const { data, error } = await this.client
-      .from('folders').select('*').eq('type', type).order('created_at', { ascending: false });
+    let query = this.client.from('folders').select('*').order('created_at', { ascending: false });
+    if (type) query = query.eq('type', type);
+    const { data, error } = await query;
     if (error) throw error;
     return data;
   },
@@ -49,17 +31,21 @@ const DB = {
   },
 
   async createFolder(name, type) {
-    const { data: userData } = await this.client.auth.getUser();
-    // 先尝试带 type 字段插入
+    const userId = await this._userId();
+    const payload = { name, user_id: userId };
+    if (type) payload.type = type;
+    // 先尝试带 type 插入
     let { data, error } = await this.client
-      .from('folders').insert({ name, type, user_id: userData.user.id }).select().single();
-    if (error) {
-      // type 字段可能不存在，回退到不带 type 的插入
-      console.warn('createFolder with type failed, trying without type:', error.message);
+      .from('folders').insert(payload).select().single();
+    if (error && type === 'custom') {
+      // 旧数据库可能不允许 'custom' 类型，回退到 'book'
+      console.warn('createFolder with custom type failed, trying book:', error.message);
       const r = await this.client
-        .from('folders').insert({ name, user_id: userData.user.id }).select().single();
+        .from('folders').insert({ name, type: 'book', user_id: userId }).select().single();
       if (r.error) throw r.error;
       data = r.data;
+    } else if (error) {
+      throw error;
     }
     return data;
   },
@@ -91,41 +77,67 @@ const DB = {
     return count;
   },
 
-  _buildEntryPayload(entry) {
-    const base = {
+  /** 构建完整 payload（含所有扩展字段） */
+  _fullPayload(entry, userId) {
+    return {
       folder_id: entry.folderId,
+      user_id: userId,
+      title: entry.title,
+      author: entry.author || '',
+      rating: entry.rating || 0,
+      notes: entry.notes || '',
+      image_url: entry.imageUrl || '',
+      cover_url: entry.coverUrl || '',
+      started_date: entry.startedDate || null,
+      finished_date: entry.finishedDate || null
+    };
+  },
+
+  /** 构建基础 payload（仅核心字段，兼容旧表结构） */
+  _basePayload(entry, userId) {
+    return {
+      folder_id: entry.folderId,
+      user_id: userId,
       title: entry.title,
       rating: entry.rating || 0,
       notes: entry.notes || '',
       image_url: entry.imageUrl || ''
     };
-    if (this._hasNewColumns) {
-      base.author = entry.author || '';
-      base.cover_url = entry.coverUrl || '';
-      base.started_date = entry.startedDate || null;
-      base.finished_date = entry.finishedDate || null;
-    }
-    return base;
   },
 
   async createEntry(entry) {
-    await this.checkNewColumns();
-    const { data: userData } = await this.client.auth.getUser();
-    const payload = { ...this._buildEntryPayload(entry), user_id: userData.user.id };
-    const { data, error } = await this.client.from('entries').insert(payload).select().single();
-    if (error) throw error;
-    return data;
+    const userId = await this._userId();
+    // 先尝试完整字段
+    const { data, error } = await this.client
+      .from('entries').insert(this._fullPayload(entry, userId)).select().single();
+    if (!error) return data;
+    // 如果失败（可能是扩展字段不存在），回退到基础字段
+    console.warn('Full insert failed, retrying with base fields:', error.message);
+    const { data: d2, error: e2 } = await this.client
+      .from('entries').insert(this._basePayload(entry, userId)).select().single();
+    if (e2) throw e2;
+    return d2;
   },
 
   async updateEntry(id, entry) {
-    await this.checkNewColumns();
+    const userId = await this._userId();
     const payload = {
-      ...this._buildEntryPayload(entry),
+      ...this._fullPayload(entry, userId),
       updated_at: new Date().toISOString()
     };
-    const { data, error } = await this.client.from('entries').update(payload).eq('id', id).select().single();
-    if (error) throw error;
-    return data;
+    const { data, error } = await this.client
+      .from('entries').update(payload).eq('id', id).select().single();
+    if (!error) return data;
+    // 回退到基础字段
+    console.warn('Full update failed, retrying with base fields:', error.message);
+    const basePayload = {
+      ...this._basePayload(entry, userId),
+      updated_at: new Date().toISOString()
+    };
+    const { data: d2, error: e2 } = await this.client
+      .from('entries').update(basePayload).eq('id', id).select().single();
+    if (e2) throw e2;
+    return d2;
   },
 
   async deleteEntry(id) {
@@ -135,10 +147,11 @@ const DB = {
 
   /* ==================== 图片上传 ==================== */
   async uploadImage(file) {
-    const { data: userData } = await this.client.auth.getUser();
+    const userId = await this._userId();
     const fileExt = file.name.split('.').pop();
-    const fileName = `${userData.user.id}/${Date.now()}.${fileExt}`;
-    const { data, error } = await this.client.storage.from('entry-images').upload(fileName, file, { cacheControl: '3600', upsert: false });
+    const fileName = `${userId}/${Date.now()}.${fileExt}`;
+    const { data, error } = await this.client.storage
+      .from('entry-images').upload(fileName, file, { cacheControl: '3600', upsert: false });
     if (error) throw error;
     return data;
   },

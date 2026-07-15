@@ -11,13 +11,18 @@ CREATE TABLE IF NOT EXISTS profiles (
 );
 
 -- 2. 创建 folders 表（文件夹 / 分类）
+-- 修复：type 允许为 NULL 或 'custom'，不再限制为仅 book/movie
 CREATE TABLE IF NOT EXISTS folders (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   user_id UUID REFERENCES auth.users(id) ON DELETE CASCADE NOT NULL,
   name TEXT NOT NULL,
-  type TEXT NOT NULL CHECK (type IN ('book', 'movie')),
+  type TEXT DEFAULT 'custom',
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
+
+-- 如果表已存在，修复 type 列约束
+ALTER TABLE folders ALTER COLUMN type DROP NOT NULL;
+ALTER TABLE folders DROP CONSTRAINT IF EXISTS folders_type_check;
 
 -- 3. 创建 entries 表（书影条目）
 CREATE TABLE IF NOT EXISTS entries (
@@ -48,64 +53,75 @@ ALTER TABLE folders ENABLE ROW LEVEL SECURITY;
 ALTER TABLE entries ENABLE ROW LEVEL SECURITY;
 
 -- 6. profiles 表 RLS 策略
+DROP POLICY IF EXISTS "Users can view own profile" ON profiles;
 CREATE POLICY "Users can view own profile"
   ON profiles FOR SELECT
   USING (auth.uid() = id);
 
+DROP POLICY IF EXISTS "Users can insert own profile" ON profiles;
 CREATE POLICY "Users can insert own profile"
   ON profiles FOR INSERT
   WITH CHECK (auth.uid() = id);
 
+DROP POLICY IF EXISTS "Users can update own profile" ON profiles;
 CREATE POLICY "Users can update own profile"
   ON profiles FOR UPDATE
   USING (auth.uid() = id);
 
 -- 7. folders 表 RLS 策略
+DROP POLICY IF EXISTS "Users can view own folders" ON folders;
 CREATE POLICY "Users can view own folders"
   ON folders FOR SELECT
   USING (auth.uid() = user_id);
 
+DROP POLICY IF EXISTS "Users can create own folders" ON folders;
 CREATE POLICY "Users can create own folders"
   ON folders FOR INSERT
   WITH CHECK (auth.uid() = user_id);
 
+DROP POLICY IF EXISTS "Users can update own folders" ON folders;
 CREATE POLICY "Users can update own folders"
   ON folders FOR UPDATE
   USING (auth.uid() = user_id);
 
+DROP POLICY IF EXISTS "Users can delete own folders" ON folders;
 CREATE POLICY "Users can delete own folders"
   ON folders FOR DELETE
   USING (auth.uid() = user_id);
 
 -- 8. entries 表 RLS 策略
+DROP POLICY IF EXISTS "Users can view own entries" ON entries;
 CREATE POLICY "Users can view own entries"
   ON entries FOR SELECT
   USING (auth.uid() = user_id);
 
+DROP POLICY IF EXISTS "Users can create own entries" ON entries;
 CREATE POLICY "Users can create own entries"
   ON entries FOR INSERT
   WITH CHECK (auth.uid() = user_id);
 
+DROP POLICY IF EXISTS "Users can update own entries" ON entries;
 CREATE POLICY "Users can update own entries"
   ON entries FOR UPDATE
   USING (auth.uid() = user_id);
 
+DROP POLICY IF EXISTS "Users can delete own entries" ON entries;
 CREATE POLICY "Users can delete own entries"
   ON entries FOR DELETE
   USING (auth.uid() = user_id);
 
 -- 9. Storage 策略（存储桶 entry-images 需手动创建）
--- 允许认证用户上传图片
+DROP POLICY IF EXISTS "Users can upload images" ON storage.objects;
 CREATE POLICY "Users can upload images"
   ON storage.objects FOR INSERT
   WITH CHECK (auth.role() = 'authenticated' AND bucket_id = 'entry-images');
 
--- 允许公开读取图片
+DROP POLICY IF EXISTS "Anyone can view images" ON storage.objects;
 CREATE POLICY "Anyone can view images"
   ON storage.objects FOR SELECT
   USING (bucket_id = 'entry-images');
 
--- 允许用户删除自己的图片
+DROP POLICY IF EXISTS "Users can delete own images" ON storage.objects;
 CREATE POLICY "Users can delete own images"
   ON storage.objects FOR DELETE
   USING (auth.uid() = owner AND bucket_id = 'entry-images');
