@@ -4,11 +4,36 @@
 
 const DB = {
   client: null,
+  _hasNewColumns: null,
 
   init(client) { this.client = client; },
 
-  /* ==================== 分类（文件夹） ==================== */
+  /** 检测新字段是否存在 */
+  async checkNewColumns() {
+    if (this._hasNewColumns !== null) return this._hasNewColumns;
+    try {
+      const { data: userData } = await this.client.auth.getUser();
+      const { error } = await this.client.from('entries').insert({
+        folder_id: '00000000-0000-0000-0000-000000000000',
+        user_id: userData.user.id,
+        title: '__test__',
+        author: '',
+        cover_url: '',
+        started_date: null,
+        finished_date: null
+      });
+      this._hasNewColumns = !error;
+      if (!error) {
+        // 清理测试数据
+        await this.client.from('entries').delete().eq('title', '__test__');
+      }
+    } catch (e) {
+      this._hasNewColumns = false;
+    }
+    return this._hasNewColumns;
+  },
 
+  /* ==================== 分类 ==================== */
   async getFolders(type) {
     const { data, error } = await this.client
       .from('folders').select('*').eq('type', type).order('created_at', { ascending: false });
@@ -44,7 +69,6 @@ const DB = {
   },
 
   /* ==================== 条目 ==================== */
-
   async getEntries(folderId) {
     const { data, error } = await this.client
       .from('entries').select('*').eq('folder_id', folderId).order('created_at', { ascending: false });
@@ -59,38 +83,39 @@ const DB = {
     return count;
   },
 
+  _buildEntryPayload(entry) {
+    const base = {
+      folder_id: entry.folderId,
+      title: entry.title,
+      rating: entry.rating || 0,
+      notes: entry.notes || '',
+      image_url: entry.imageUrl || ''
+    };
+    if (this._hasNewColumns) {
+      base.author = entry.author || '';
+      base.cover_url = entry.coverUrl || '';
+      base.started_date = entry.startedDate || null;
+      base.finished_date = entry.finishedDate || null;
+    }
+    return base;
+  },
+
   async createEntry(entry) {
+    await this.checkNewColumns();
     const { data: userData } = await this.client.auth.getUser();
-    const { data, error } = await this.client
-      .from('entries').insert({
-        folder_id: entry.folderId,
-        user_id: userData.user.id,
-        title: entry.title,
-        author: entry.author || '',
-        rating: entry.rating || 0,
-        notes: entry.notes || '',
-        image_url: entry.imageUrl || '',
-        cover_url: entry.coverUrl || '',
-        started_date: entry.startedDate || null,
-        finished_date: entry.finishedDate || null
-      }).select().single();
+    const payload = { ...this._buildEntryPayload(entry), user_id: userData.user.id };
+    const { data, error } = await this.client.from('entries').insert(payload).select().single();
     if (error) throw error;
     return data;
   },
 
   async updateEntry(id, entry) {
-    const { data, error } = await this.client
-      .from('entries').update({
-        title: entry.title,
-        author: entry.author || '',
-        rating: entry.rating || 0,
-        notes: entry.notes || '',
-        image_url: entry.imageUrl || '',
-        cover_url: entry.coverUrl || '',
-        started_date: entry.startedDate || null,
-        finished_date: entry.finishedDate || null,
-        updated_at: new Date().toISOString()
-      }).eq('id', id).select().single();
+    await this.checkNewColumns();
+    const payload = {
+      ...this._buildEntryPayload(entry),
+      updated_at: new Date().toISOString()
+    };
+    const { data, error } = await this.client.from('entries').update(payload).eq('id', id).select().single();
     if (error) throw error;
     return data;
   },
@@ -101,7 +126,6 @@ const DB = {
   },
 
   /* ==================== 图片上传 ==================== */
-
   async uploadImage(file) {
     const { data: userData } = await this.client.auth.getUser();
     const fileExt = file.name.split('.').pop();
@@ -114,10 +138,5 @@ const DB = {
   getImageUrl(path) {
     const { data } = this.client.storage.from('entry-images').getPublicUrl(path);
     return data.publicUrl;
-  },
-
-  async deleteImage(path) {
-    const { error } = await this.client.storage.from('entry-images').remove([path]);
-    if (error) throw error;
   }
 };

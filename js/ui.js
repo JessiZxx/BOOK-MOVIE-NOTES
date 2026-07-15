@@ -329,7 +329,7 @@ const UI = {
       author: (doc.author_name || []).join(', '),
       year: doc.first_publish_year || '',
       cover: doc.cover_i ? `https://covers.openlibrary.org/b/id/${doc.cover_i}-M.jpg` : '',
-      coverId: doc.cover_i || null
+      olid: doc.key ? doc.key.replace('/works/', '') : null
     }));
   },
 
@@ -350,12 +350,25 @@ const UI = {
     this.els.searchInput.value = '';
     this.showLoading();
     try {
+      // 获取更多详情（描述等）
+      let description = '';
+      if (result.olid) {
+        try {
+          const workResp = await fetch(`https://openlibrary.org/works/${result.olid}.json`);
+          const workData = await workResp.json();
+          description = (workData.description && typeof workData.description === 'object')
+            ? (workData.description.value || '')
+            : (workData.description || '');
+          if (description && description.length > 500) description = description.substring(0, 500) + '…';
+        } catch (e) { /* 获取描述失败，忽略 */ }
+      }
+
       const entry = {
         folderId: this.currentFolderId,
         title: result.title,
         author: result.author || '',
         rating: 0,
-        notes: '',
+        notes: description,
         imageUrl: '',
         coverUrl: result.cover || '',
         startedDate: null,
@@ -363,7 +376,10 @@ const UI = {
       };
       await DB.createEntry(entry);
       this.loadEntries();
-    } catch (err) { alert('创建失败：' + err.message); }
+    } catch (err) {
+      console.error('创建失败:', err);
+      alert('创建失败：' + err.message + '\n\n请确认数据库已执行 ALTER TABLE 添加新字段');
+    }
     finally { this.hideLoading(); }
   },
 
@@ -466,9 +482,14 @@ const UI = {
       let coverUrl = this.currentImagePath || '';
       let imageUrl = this.currentImagePath || '';
       if (this.pendingImageFile) {
-        const uploadResult = await DB.uploadImage(this.pendingImageFile);
-        imageUrl = DB.getImageUrl(uploadResult.path);
-        coverUrl = imageUrl;
+        try {
+          const uploadResult = await DB.uploadImage(this.pendingImageFile);
+          imageUrl = DB.getImageUrl(uploadResult.path);
+          coverUrl = imageUrl;
+        } catch (uploadErr) {
+          console.warn('图片上传失败，将跳过图片:', uploadErr);
+          // 图片上传失败不阻塞保存
+        }
       }
       const entryData = {
         folderId: this.currentFolderId,
@@ -482,7 +503,10 @@ const UI = {
       if (this.currentEntryId) await DB.updateEntry(this.currentEntryId, entryData);
       else await DB.createEntry(entryData);
       this.navigateTo('entries', { folderId: this.currentFolderId, type: this.currentType });
-    } catch (err) { alert('保存失败：' + err.message); }
+    } catch (err) {
+      console.error('保存失败:', err);
+      alert('保存失败：' + err.message + '\n\n如果提示字段不存在，请在 Supabase SQL Editor 中执行：\nALTER TABLE entries ADD COLUMN IF NOT EXISTS author TEXT DEFAULT \'\';\nALTER TABLE entries ADD COLUMN IF NOT EXISTS cover_url TEXT DEFAULT \'\';\nALTER TABLE entries ADD COLUMN IF NOT EXISTS started_date DATE;\nALTER TABLE entries ADD COLUMN IF NOT EXISTS finished_date DATE;');
+    }
     finally { this.hideLoading(); }
   },
 
