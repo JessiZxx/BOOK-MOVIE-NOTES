@@ -30,22 +30,21 @@ const DB = {
     return data;
   },
 
-  async createFolder(name, type) {
+  async createFolder(name, type, icon) {
     const userId = await this._userId();
     const payload = { name, user_id: userId };
     if (type) payload.type = type;
-    // 先尝试带 type 插入
+    if (icon) payload.icon = icon;
+    // 先尝试带完整字段插入
     let { data, error } = await this.client
       .from('folders').insert(payload).select().single();
-    if (error && type === 'custom') {
-      // 旧数据库可能不允许 'custom' 类型，回退到 'book'
-      console.warn('createFolder with custom type failed, trying book:', error.message);
+    if (error) {
+      // 旧数据库可能不支持 custom/icon，回退到基础字段
+      console.warn('createFolder full insert failed, trying base:', error.message);
       const r = await this.client
         .from('folders').insert({ name, type: 'book', user_id: userId }).select().single();
       if (r.error) throw r.error;
       data = r.data;
-    } else if (error) {
-      throw error;
     }
     return data;
   },
@@ -77,25 +76,10 @@ const DB = {
     return count;
   },
 
-  /** 构建完整 payload（含所有扩展字段） */
-  _fullPayload(entry, userId) {
-    return {
-      folder_id: entry.folderId,
-      user_id: userId,
-      title: entry.title,
-      author: entry.author || '',
-      rating: entry.rating || 0,
-      notes: entry.notes || '',
-      image_url: entry.imageUrl || '',
-      cover_url: entry.coverUrl || '',
-      started_date: entry.startedDate || null,
-      finished_date: entry.finishedDate || null
-    };
-  },
-
-  /** 构建基础 payload（仅核心字段，兼容旧表结构） */
-  _basePayload(entry, userId) {
-    return {
+  async createEntry(entry) {
+    const userId = await this._userId();
+    // 第一步：只用核心字段插入，确保一定成功
+    const core = {
       folder_id: entry.folderId,
       user_id: userId,
       title: entry.title,
@@ -103,41 +87,51 @@ const DB = {
       notes: entry.notes || '',
       image_url: entry.imageUrl || ''
     };
-  },
+    const { error } = await this.client.from('entries').insert(core);
+    if (error) throw new Error('数据库写入失败：' + error.message);
 
-  async createEntry(entry) {
-    const userId = await this._userId();
-    // 先尝试完整字段
-    const { data, error } = await this.client
-      .from('entries').insert(this._fullPayload(entry, userId)).select().single();
-    if (!error) return data;
-    // 如果失败（可能是扩展字段不存在），回退到基础字段
-    console.warn('Full insert failed, retrying with base fields:', error.message);
-    const { data: d2, error: e2 } = await this.client
-      .from('entries').insert(this._basePayload(entry, userId)).select().single();
-    if (e2) throw e2;
-    return d2;
+    // 第二步：查出刚插入的条目，尝试补充扩展字段
+    const { data: rows } = await this.client.from('entries')
+      .select('id').eq('folder_id', entry.folderId).eq('title', entry.title)
+      .order('created_at', { ascending: false }).limit(1);
+    const newId = rows?.[0]?.id;
+    if (newId) {
+      try {
+        await this.client.from('entries').update({
+          author: entry.author || '',
+          cover_url: entry.coverUrl || '',
+          started_date: entry.startedDate || null,
+          finished_date: entry.finishedDate || null,
+          updated_at: new Date().toISOString()
+        }).eq('id', newId);
+      } catch (e) { console.warn('扩展字段补充失败（可忽略）:', e.message); }
+    }
+    return { id: newId };
   },
 
   async updateEntry(id, entry) {
     const userId = await this._userId();
-    const payload = {
-      ...this._fullPayload(entry, userId),
+    // 核心字段
+    const core = {
+      title: entry.title,
+      rating: entry.rating || 0,
+      notes: entry.notes || '',
+      image_url: entry.imageUrl || '',
       updated_at: new Date().toISOString()
     };
-    const { data, error } = await this.client
-      .from('entries').update(payload).eq('id', id).select().single();
-    if (!error) return data;
-    // 回退到基础字段
-    console.warn('Full update failed, retrying with base fields:', error.message);
-    const basePayload = {
-      ...this._basePayload(entry, userId),
-      updated_at: new Date().toISOString()
-    };
-    const { data: d2, error: e2 } = await this.client
-      .from('entries').update(basePayload).eq('id', id).select().single();
-    if (e2) throw e2;
-    return d2;
+    const { error } = await this.client.from('entries').update(core).eq('id', id);
+    if (error) throw new Error('数据库更新失败：' + error.message);
+
+    // 尝试补充扩展字段
+    try {
+      await this.client.from('entries').update({
+        author: entry.author || '',
+        cover_url: entry.coverUrl || '',
+        started_date: entry.startedDate || null,
+        finished_date: entry.finishedDate || null
+      }).eq('id', id);
+    } catch (e) { console.warn('扩展字段更新失败（可忽略）:', e.message); }
+    return { id };
   },
 
   async deleteEntry(id) {

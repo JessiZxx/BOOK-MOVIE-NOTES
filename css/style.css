@@ -318,8 +318,32 @@ img { max-width: 100%; height: auto; display: block; }
 }
 
 /* ============================================================
-   区块标题
+   图标选择器
    ============================================================ */
+.icon-picker { display: flex; flex-wrap: wrap; gap: 8px; }
+.icon-option {
+  width: 44px; height: 44px; display: flex; align-items: center; justify-content: center;
+  font-size: 1.4rem; border: 2px solid var(--color-line); border-radius: 8px;
+  cursor: pointer; transition: all 0.15s; background: var(--color-paper);
+}
+.icon-option:hover { border-color: var(--color-vermilion); transform: scale(1.1); }
+.icon-option.active { border-color: var(--color-vermilion); background: var(--color-paper-light); box-shadow: 0 0 0 2px rgba(139,58,50,0.15); }
+
+/* ============================================================
+   文字封面（无图片时自动生成）
+   ============================================================ */
+.text-cover {
+  width: 100%; aspect-ratio: 3/4; display: flex; align-items: center; justify-content: center;
+  font-size: 1.6rem; letter-spacing: 2px; color: var(--color-paper-light);
+  text-align: center; line-height: 1.4; padding: 16px; word-break: break-all;
+  overflow: hidden; border-radius: 4px;
+}
+.text-cover--c0 { background: linear-gradient(135deg, #8B3A32, #5C2620); }
+.text-cover--c1 { background: linear-gradient(135deg, #4A6B5D, #2D4A3E); }
+.text-cover--c2 { background: linear-gradient(135deg, #6B5B4A, #4A3D32); }
+.text-cover--c3 { background: linear-gradient(135deg, #3A4A6B, #262D5C); }
+.text-cover--c4 { background: linear-gradient(135deg, #6B4A5A, #4A2D3E); }
+.text-cover--c5 { background: linear-gradient(135deg, #5A6B3A, #3E4A26); }
 .section-header {
   display: flex; align-items: center; justify-content: space-between;
   margin-bottom: 24px; flex-wrap: wrap; gap: 16px; padding-bottom: 14px;

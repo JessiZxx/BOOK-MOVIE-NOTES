@@ -49,6 +49,7 @@ const UI = {
       folderModal: qs('#folder-modal'), folderForm: qs('#folder-form'),
       folderName: qs('#folder-name'), folderId: qs('#folder-id'),
       folderModalTitle: qs('#folder-modal-title'),
+      iconPicker: qs('#icon-picker'), selectedIcon: '📂',
       btnCancelFolder: qs('#btn-cancel-folder'),
       loadingOverlay: qs('#loading-overlay'),
     };
@@ -66,8 +67,17 @@ const UI = {
     this.els.btnAddCategory.addEventListener('click', () => this.openCategoryModal());
     this.els.folderForm.addEventListener('submit', e => this.handleFolderSubmit(e));
     this.els.btnCancelFolder.addEventListener('click', () => this.closeFolderModal());
+    this.els.iconPicker.addEventListener('click', e => {
+      const opt = e.target.closest('.icon-option');
+      if (opt) { this.els.iconPicker.querySelectorAll('.icon-option').forEach(o => o.classList.remove('active')); opt.classList.add('active'); this.els.selectedIcon = opt.dataset.icon; }
+    });
     this.els.btnAddEntry.addEventListener('click', () => this.openEntryForm(null));
     this.els.entryForm.addEventListener('submit', e => this.handleEntrySubmit(e));
+    this.els.entryTitle.addEventListener('input', () => {
+      if (!this.els.imagePreviewImg.src || this.els.imagePreviewImg.style.display === 'none') {
+        this.showTextCoverPreview(this.els.entryTitle.value);
+      }
+    });
     this.els.btnDeleteEntry.addEventListener('click', () => this.handleDeleteEntry());
     this.els.starRating.addEventListener('click', e => { if (e.target.dataset.star) this.setRating(parseInt(e.target.dataset.star)); });
     this.els.entryImageInput.addEventListener('change', e => this.handleImageSelect(e));
@@ -235,8 +245,8 @@ const UI = {
         return true;
       });
       const customCats = await Promise.all(customFolders.map(async f => ({
-        id: f.id, name: f.name, type: f.type || 'custom', icon: '📂',
-        isBuiltin: false, folderId: f.id, count: await DB.getEntryCount(f.id)
+        id: f.id, name: f.name, type: f.type || 'custom', icon: f.icon || '📂',
+        isBuiltin: false, folderId: f.id, count: await DB.getEntryCount(f.id), folderData: f
       })));
       this.renderDashboard([...builtins, ...customCats]);
     } catch (err) { console.error(err); this.toast('加载失败：' + err.message, 'error'); }
@@ -247,14 +257,15 @@ const UI = {
     this.els.dashboardCategories.innerHTML = cats.map(c => {
       const tabLabel = c.isBuiltin ? (c.type === 'book' ? 'BOOKS' : 'MOVIES') : 'CUSTOM';
       const tabClass = c.isBuiltin ? '' : 'custom';
+      const icon = c.icon || c.folderData?.icon || '📂';
       return `
-        <div class="category-card" data-id="${c.id}" data-type="${c.type}" data-folder="${c.folderId || ''}" data-name="${this.esc(c.name)}">
+        <div class="category-card" data-id="${c.id}" data-type="${c.type}" data-folder="${c.folderId || ''}" data-name="${this.esc(c.name)}" data-icon="${icon}">
           <div class="category-card-tab ${tabClass}">${tabLabel}</div>
-          <div class="category-card-icon">${c.icon}</div>
+          <div class="category-card-icon">${icon}</div>
           <div class="category-card-title">${this.esc(c.name)}</div>
           <div class="category-card-count">${c.count || 0} 条记录</div>
           ${!c.isBuiltin ? `<div class="category-card-actions">
-            <button class="btn-icon edit-folder" data-id="${c.id}" data-name="${this.esc(c.name)}" title="重命名">✎</button>
+            <button class="btn-icon edit-folder" data-id="${c.id}" data-name="${this.esc(c.name)}" data-icon="${icon}" title="编辑">✎</button>
             <button class="btn-icon delete-folder" data-id="${c.id}" data-name="${this.esc(c.name)}" title="删除">✕</button>
           </div>` : ''}
         </div>
@@ -277,7 +288,7 @@ const UI = {
     this.els.dashboardCategories.querySelectorAll('.edit-folder').forEach(btn => {
       btn.addEventListener('click', (e) => {
         e.stopPropagation();
-        this.openCategoryModal(btn.dataset.id, btn.dataset.name);
+        this.openCategoryModal(btn.dataset.id, btn.dataset.name, btn.dataset.icon);
       });
     });
     // 删除按钮
@@ -304,10 +315,14 @@ const UI = {
   },
 
   /* ==================== 分类模态框 ==================== */
-  openCategoryModal(id, name) {
+  openCategoryModal(id, name, icon) {
     this.els.folderModalTitle.textContent = id ? '编辑分类' : '新建分类';
     this.els.folderName.value = name || '';
     this.els.folderId.value = id || '';
+    this.els.selectedIcon = icon || '📂';
+    this.els.iconPicker.querySelectorAll('.icon-option').forEach(o => {
+      o.classList.toggle('active', o.dataset.icon === this.els.selectedIcon);
+    });
     this.els.folderModal.classList.add('active');
     this.els.folderName.focus();
   },
@@ -326,7 +341,7 @@ const UI = {
     this.showLoading();
     try {
       if (id) await DB.updateFolder(id, name);
-      else await DB.createFolder(name, 'custom');
+      else await DB.createFolder(name, 'custom', this.els.selectedIcon);
       this.closeFolderModal();
       this.toast(id ? '分类已更新' : '分类已创建', '');
       this.loadDashboard();
@@ -420,15 +435,15 @@ const UI = {
         return;
       }
       this.els.entriesList.style.display = ''; this.els.entriesEmpty.style.display = 'none';
-      const tabLabel = this.currentType === 'book' ? 'BOOK' : this.currentType === 'movie' ? 'FILM' : '';
       entries.forEach(entry => {
         const coverUrl = entry.cover_url || entry.image_url || '';
+        const tabLabel = this.currentType === 'book' ? 'BOOK' : this.currentType === 'movie' ? 'FILM' : '';
         const card = document.createElement('div');
         card.className = 'archive-card';
         card.innerHTML = `
           ${tabLabel ? `<div class="archive-card-tab">${tabLabel}</div>` : ''}
           <div class="archive-card-cover">
-            ${coverUrl ? `<img src="${this.esc(coverUrl)}" alt="" loading="lazy">` : '<div class="archive-card-cover-placeholder">📖</div>'}
+            ${coverUrl ? `<img src="${this.esc(coverUrl)}" alt="" loading="lazy">` : this.textCover(entry.title)}
           </div>
           <div class="archive-card-divider"></div>
           <div class="archive-card-info">
@@ -466,16 +481,34 @@ const UI = {
           this.setRating(data.rating || 0);
           const imgUrl = data.cover_url || data.image_url || '';
           if (imgUrl) { this.currentImagePath = imgUrl; this.els.imagePreview.style.display = 'block'; this.els.imagePreviewImg.src = imgUrl; this.els.imageUploadBtn.style.display = 'none'; }
+          else { this.showTextCoverPreview(data.title); }
         }
       } catch (err) { this.toast('加载失败：' + err.message, 'error'); }
       finally { this.hideLoading(); }
-    } else { this.els.entryFormTitle.textContent = '新建条目'; }
+    } else { this.els.entryFormTitle.textContent = '新建条目'; this.showTextCoverPreview(''); }
+  },
+
+  showTextCoverPreview(title) {
+    this.els.imagePreview.style.display = 'block';
+    this.els.imagePreviewImg.style.display = 'none';
+    // 创建或更新文字封面容器
+    let tc = this.els.imagePreview.querySelector('.text-cover');
+    if (!tc) { tc = document.createElement('div'); this.els.imagePreview.appendChild(tc); }
+    const text = (title || '新条目').replace(/[《》「」『』\s]/g, '').slice(0, 4);
+    const colorIdx = (text.charCodeAt(0) || 0) % 6;
+    tc.className = `text-cover text-cover--c${colorIdx}`;
+    tc.textContent = text;
+    tc.style.display = '';
+    this.els.imageUploadBtn.style.display = '';
   },
 
   resetEntryForm() {
     this.els.entryForm.reset(); this.els.entryRating.value = '0'; this.setRating(0);
     this.currentImagePath = null; this.pendingImageFile = null;
     this.els.imagePreview.style.display = 'none'; this.els.imagePreviewImg.src = '';
+    this.els.imagePreviewImg.style.display = '';
+    const tc = this.els.imagePreview.querySelector('.text-cover');
+    if (tc) tc.style.display = 'none';
     this.els.imageUploadBtn.style.display = ''; this.els.btnDeleteEntry.style.display = 'none';
     this.els.entryImageInput.value = '';
   },
@@ -525,14 +558,34 @@ const UI = {
     if (!file.type.startsWith('image/')) { this.toast('请选择图片文件', 'error'); return; }
     this.pendingImageFile = file; this.currentImagePath = null;
     const reader = new FileReader();
-    reader.onload = ev => { this.els.imagePreview.style.display = 'block'; this.els.imagePreviewImg.src = ev.target.result; this.els.imageUploadBtn.style.display = 'none'; };
+    reader.onload = ev => {
+      this.els.imagePreview.style.display = 'block';
+      this.els.imagePreviewImg.style.display = '';
+      this.els.imagePreviewImg.src = ev.target.result;
+      const tc = this.els.imagePreview.querySelector('.text-cover');
+      if (tc) tc.style.display = 'none';
+      this.els.imageUploadBtn.style.display = 'none';
+    };
     reader.readAsDataURL(file);
   },
-  clearImage() { this.pendingImageFile = null; this.currentImagePath = null; this.els.imagePreview.style.display = 'none'; this.els.imagePreviewImg.src = ''; this.els.imageUploadBtn.style.display = ''; this.els.entryImageInput.value = ''; },
+  clearImage() {
+    this.pendingImageFile = null; this.currentImagePath = null;
+    this.els.imagePreview.style.display = 'none'; this.els.imagePreviewImg.src = '';
+    this.els.imagePreviewImg.style.display = '';
+    const tc = this.els.imagePreview.querySelector('.text-cover');
+    if (tc) tc.style.display = 'none';
+    this.els.imageUploadBtn.style.display = ''; this.els.entryImageInput.value = '';
+  },
 
   /* ==================== 工具 ==================== */
   showLoading() { this.els.loadingOverlay.style.display = 'flex'; },
   hideLoading() { this.els.loadingOverlay.style.display = 'none'; },
   esc(s) { const d = document.createElement('div'); d.textContent = s; return d.innerHTML; },
-  fmtDate(d) { if (!d) return ''; return new Date(d).toLocaleDateString('zh-CN', { year: 'numeric', month: '2-digit', day: '2-digit' }); }
+  fmtDate(d) { if (!d) return ''; return new Date(d).toLocaleDateString('zh-CN', { year: 'numeric', month: '2-digit', day: '2-digit' }); },
+  textCover(title) {
+    // 取标题前几个字做封面，无图时自动生成
+    const text = (title || '未命名').replace(/[《》「」『』\s]/g, '').slice(0, 4);
+    const colorIdx = (text.charCodeAt(0) || 0) % 6;
+    return `<div class="text-cover text-cover--c${colorIdx}">${this.esc(text)}</div>`;
+  }
 };

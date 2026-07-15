@@ -23,6 +23,7 @@ CREATE TABLE IF NOT EXISTS folders (
 -- 如果表已存在，修复 type 列约束
 ALTER TABLE folders ALTER COLUMN type DROP NOT NULL;
 ALTER TABLE folders DROP CONSTRAINT IF EXISTS folders_type_check;
+ALTER TABLE folders ADD COLUMN IF NOT EXISTS icon TEXT DEFAULT '📂';
 
 -- 3. 创建 entries 表（书影条目）
 CREATE TABLE IF NOT EXISTS entries (
