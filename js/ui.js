@@ -3,15 +3,13 @@
    ============================================================ */
 
 const UI = {
-  /* ==================== 状态 ==================== */
-  currentView: 'dashboard',   // dashboard | folders | entries | entry-detail
-  currentType: null,          // 'book' | 'movie'
+  currentView: 'dashboard',
+  currentType: null,
   currentFolderId: null,
   currentEntryId: null,
-  currentImagePath: null,     // 已有图片的 Storage 路径
-  pendingImageFile: null,     // 待上传的新图片文件
+  currentImagePath: null,
+  pendingImageFile: null,
 
-  /* ==================== DOM 引用 ==================== */
   els: {},
 
   init() {
@@ -26,6 +24,7 @@ const UI = {
       appView:          qs('#app-view'),
       loginForm:        qs('#login-form'),
       registerForm:     qs('#register-form'),
+      authTabs:         document.querySelectorAll('.auth-tab'),
       authMessage:      qs('#auth-message'),
       userEmail:        qs('#user-email'),
       btnLogout:        qs('#btn-logout'),
@@ -45,6 +44,7 @@ const UI = {
 
       entryDetailView:  qs('#entry-detail-view'),
       entryForm:        qs('#entry-form'),
+      entryFormTitle:   qs('#entry-form-title'),
       entryTitle:       qs('#entry-title'),
       entryRating:      qs('#entry-rating'),
       entryNotes:       qs('#entry-notes'),
@@ -70,14 +70,24 @@ const UI = {
   },
 
   bindEvents() {
-    // 认证
     this.els.loginForm.addEventListener('submit', (e) => this.handleLogin(e));
     this.els.registerForm.addEventListener('submit', (e) => this.handleRegister(e));
     this.els.btnLogout.addEventListener('click', () => App.logout());
 
-    // 切换登录/注册
-    qs('#switch-to-register').addEventListener('click', () => this.showRegisterForm());
-    qs('#switch-to-login').addEventListener('click', () => this.showLoginForm());
+    // Tab 切换
+    this.els.authTabs.forEach(tab => {
+      tab.addEventListener('click', () => {
+        const target = tab.dataset.tab;
+        this.switchAuthTab(target);
+      });
+    });
+
+    // 底部链接切换
+    document.querySelectorAll('.link-btn[data-switch]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        this.switchAuthTab(btn.dataset.switch);
+      });
+    });
 
     // 导航
     this.els.btnBack.addEventListener('click', () => this.goBack());
@@ -110,6 +120,26 @@ const UI = {
     // 图片上传
     this.els.entryImageInput.addEventListener('change', (e) => this.handleImageSelect(e));
     this.els.btnRemoveImg.addEventListener('click', () => this.clearImage());
+
+    // 点击模态框遮罩关闭
+    document.querySelector('#folder-modal .modal-overlay')
+      .addEventListener('click', () => this.closeFolderModal());
+  },
+
+  /* ==================== 认证 Tab 切换 ==================== */
+
+  switchAuthTab(tab) {
+    this.els.authTabs.forEach(t => {
+      t.classList.toggle('active', t.dataset.tab === tab);
+    });
+    if (tab === 'login') {
+      this.els.loginForm.style.display = 'block';
+      this.els.registerForm.style.display = 'none';
+    } else {
+      this.els.loginForm.style.display = 'none';
+      this.els.registerForm.style.display = 'block';
+    }
+    this.clearAuthMessage();
   },
 
   /* ==================== 视图导航 ==================== */
@@ -117,10 +147,8 @@ const UI = {
   showView(viewName) {
     this.currentView = viewName;
 
-    // 隐藏所有子视图
     document.querySelectorAll('.subview').forEach(el => el.classList.remove('active'));
 
-    // 显示对应子视图
     const viewMap = {
       dashboard:    this.els.dashboardView,
       folders:      this.els.foldersView,
@@ -129,13 +157,11 @@ const UI = {
     };
     if (viewMap[viewName]) viewMap[viewName].classList.add('active');
 
-    // 返回按钮
     this.els.btnBack.style.display = viewName === 'dashboard' ? 'none' : 'inline-flex';
 
-    // 标题
     const titles = {
       dashboard: '我的记录',
-      folders:   this.currentType === 'book' ? 'Books - 文件夹' : 'Movies - 文件夹',
+      folders:   this.currentType === 'book' ? 'Books / 文件夹' : 'Movies / 文件夹',
       entries:   '条目',
       'entry-detail': this.currentEntryId ? '编辑条目' : '新建条目'
     };
@@ -178,18 +204,6 @@ const UI = {
 
   /* ==================== 认证 UI ==================== */
 
-  showLoginForm() {
-    this.els.loginForm.style.display = 'block';
-    this.els.registerForm.style.display = 'none';
-    this.clearAuthMessage();
-  },
-
-  showRegisterForm() {
-    this.els.loginForm.style.display = 'none';
-    this.els.registerForm.style.display = 'block';
-    this.clearAuthMessage();
-  },
-
   showAuthMessage(msg, type) {
     this.els.authMessage.textContent = msg;
     this.els.authMessage.className = 'auth-message ' + type;
@@ -210,7 +224,7 @@ const UI = {
   showAuth() {
     this.els.appView.classList.remove('active');
     this.els.authView.classList.add('active');
-    this.showLoginForm();
+    this.switchAuthTab('login');
     this.els.loginForm.reset();
     this.els.registerForm.reset();
   },
@@ -254,7 +268,7 @@ const UI = {
       this.showAuthMessage(result.error.message || '注册失败', 'error');
     } else {
       this.showAuthMessage('注册成功！请查收邮箱确认链接（如已开启邮箱确认），或直接登录。', 'success');
-      setTimeout(() => this.showLoginForm(), 2000);
+      setTimeout(() => this.switchAuthTab('login'), 2500);
     }
   },
 
@@ -264,7 +278,7 @@ const UI = {
     this.showLoading();
     try {
       const folders = await DB.getFolders(this.currentType);
-      this.els.foldersTitle.textContent = this.currentType === 'book' ? 'Books - 文件夹' : 'Movies - 文件夹';
+      this.els.foldersTitle.textContent = this.currentType === 'book' ? 'Books · 文件夹' : 'Movies · 文件夹';
       this.els.foldersList.innerHTML = '';
 
       if (folders.length === 0) {
@@ -415,10 +429,15 @@ const UI = {
 
   /* ==================== 条目表单 UI ==================== */
 
+  openEntryForm(entryId) {
+    this.navigateTo('entry-detail', entryId);
+  },
+
   async loadEntryForm(entryId) {
     this.resetEntryForm();
 
     if (entryId) {
+      this.els.entryFormTitle.textContent = '编辑条目';
       this.els.btnDeleteEntry.style.display = '';
       this.showLoading();
       try {
@@ -446,6 +465,8 @@ const UI = {
       } finally {
         this.hideLoading();
       }
+    } else {
+      this.els.entryFormTitle.textContent = '新建条目';
     }
   },
 
@@ -471,7 +492,6 @@ const UI = {
     try {
       let imageUrl = this.currentImagePath || '';
 
-      // 如果有新图片需要上传
       if (this.pendingImageFile) {
         const uploadResult = await DB.uploadImage(this.pendingImageFile);
         imageUrl = DB.getImageUrl(uploadResult.path);
@@ -587,8 +607,3 @@ const UI = {
     return div.innerHTML;
   }
 };
-
-// 快捷函数
-function qs(sel) {
-  return document.querySelector(sel);
-}

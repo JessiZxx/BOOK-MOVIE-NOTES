@@ -3,55 +3,92 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>私人书影记录</title>
+  <title>书影 &middot; 私人书影记录</title>
   <link rel="stylesheet" href="css/style.css">
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
 </head>
 <body>
 
   <!-- ==================== 认证视图 ==================== -->
-  <div id="auth-view" class="view active">
-    <div class="auth-container">
-      <div class="auth-card">
-        <h1 class="auth-title">私人书影记录</h1>
-        <p class="auth-subtitle">记录你的阅读与观影时光</p>
+  <div id="auth-view" class="view">
+    <div class="auth-wrapper">
 
-        <!-- 登录表单 -->
-        <form id="login-form" class="auth-form">
-          <h2 class="form-title">登录</h2>
-          <div class="form-group">
-            <label for="login-email">邮箱</label>
-            <input type="email" id="login-email" placeholder="请输入邮箱" required autocomplete="email">
+      <!-- 左侧：品牌展示 -->
+      <div class="auth-left">
+        <div class="auth-logo">
+          <span class="auth-logo-mark">Ⅲ</span>
+          <div class="auth-logo-text">
+            <span class="auth-logo-main">书影</span>
+            <span class="auth-logo-sub">SHELF</span>
           </div>
-          <div class="form-group">
-            <label for="login-password">密码</label>
-            <input type="password" id="login-password" placeholder="请输入密码" required autocomplete="current-password">
-          </div>
-          <button type="submit" class="btn btn-primary btn-full">登录</button>
-          <p class="form-switch">
-            还没有账号？<button type="button" class="link-btn" id="switch-to-register">立即注册</button>
+        </div>
+
+        <div class="auth-hero">
+          <h2 class="auth-hero-title">
+            把读过的书<br>
+            与看过的影，<br>
+            <span class="accent">安安静静收好。</span>
+          </h2>
+          <p class="auth-hero-desc">
+            一座只属于你的私人书房。自定义文件夹归档，写下读后感与影评，存放手写摘抄、书籍封面与电影海报。
           </p>
-        </form>
+        </div>
 
-        <!-- 注册表单 -->
-        <form id="register-form" class="auth-form" style="display:none;">
-          <h2 class="form-title">注册</h2>
-          <div class="form-group">
-            <label for="register-email">邮箱</label>
-            <input type="email" id="register-email" placeholder="请输入邮箱" required autocomplete="email">
-          </div>
-          <div class="form-group">
-            <label for="register-password">密码</label>
-            <input type="password" id="register-password" placeholder="请输入密码（至少6位）" required minlength="6" autocomplete="new-password">
-          </div>
-          <button type="submit" class="btn btn-primary btn-full">注册</button>
-          <p class="form-switch">
-            已有账号？<button type="button" class="link-btn" id="switch-to-login">去登录</button>
-          </p>
-        </form>
-
-        <div id="auth-message" class="auth-message"></div>
+        <div class="auth-quote">
+          <p class="auth-quote-text">「我们读书，是为了知道自己并不孤单。」</p>
+          <p class="auth-quote-author">—— C. S. 路易斯</p>
+        </div>
       </div>
+
+      <!-- 右侧：登录/注册表单 -->
+      <div class="auth-right">
+        <div class="auth-panel">
+
+          <!-- Tab 切换 -->
+          <div class="auth-tabs">
+            <button class="auth-tab active" data-tab="login">登录</button>
+            <button class="auth-tab" data-tab="register">注册</button>
+          </div>
+
+          <!-- 登录表单 -->
+          <form id="login-form" class="auth-form">
+            <p class="auth-form-title">欢迎回来，请用邮箱登录。</p>
+            <div class="form-group">
+              <label for="login-email">邮箱</label>
+              <input type="email" id="login-email" placeholder="you@example.com" required autocomplete="email">
+            </div>
+            <div class="form-group">
+              <label for="login-password">密码</label>
+              <input type="password" id="login-password" placeholder="至少 6 位" required autocomplete="current-password">
+            </div>
+            <button type="submit" class="btn btn-primary">登录</button>
+            <p class="auth-footnote">
+              还没有账号？<button type="button" class="link-btn" data-switch="register">立即注册</button>
+            </p>
+          </form>
+
+          <!-- 注册表单 -->
+          <form id="register-form" class="auth-form" style="display:none;">
+            <p class="auth-form-title">创建你的私人书房。</p>
+            <div class="form-group">
+              <label for="register-email">邮箱</label>
+              <input type="email" id="register-email" placeholder="you@example.com" required autocomplete="email">
+            </div>
+            <div class="form-group">
+              <label for="register-password">密码</label>
+              <input type="password" id="register-password" placeholder="至少 6 位" required minlength="6" autocomplete="new-password">
+            </div>
+            <p class="auth-hint">至少 6 位字符。</p>
+            <button type="submit" class="btn btn-primary">注册</button>
+            <p class="auth-footnote">
+              已有账号？<button type="button" class="link-btn" data-switch="login">去登录</button>
+            </p>
+          </form>
+
+          <div id="auth-message" class="auth-message"></div>
+        </div>
+      </div>
+
     </div>
   </div>
 
@@ -61,12 +98,16 @@
     <!-- 顶部导航 -->
     <header class="app-header">
       <div class="header-left">
-        <button class="btn btn-icon" id="btn-back" title="返回">←</button>
+        <button class="btn btn-icon" id="btn-back" title="返回" style="display:none;">←</button>
+        <div class="header-logo">
+          <span class="header-logo-mark">Ⅲ</span>
+          <span class="header-logo-text">书影</span>
+        </div>
         <h1 class="header-title" id="header-title">我的记录</h1>
       </div>
       <div class="header-right">
         <span class="user-email" id="user-email"></span>
-        <button class="btn btn-text" id="btn-logout">退出</button>
+        <button class="btn-logout" id="btn-logout">退出</button>
       </div>
     </header>
 
@@ -75,16 +116,22 @@
 
       <!-- 仪表盘视图：Books / Movies 两大板块 -->
       <div id="dashboard-view" class="subview active">
+        <div class="dashboard-greeting">
+          <h1>我的书房</h1>
+          <p>记录每一本书与每一部电影</p>
+        </div>
         <div class="dashboard-grid">
           <div class="dashboard-card" data-type="book">
-            <div class="card-icon">📚</div>
-            <h2 class="card-title">Books</h2>
-            <p class="card-desc">书籍记录</p>
+            <div class="dashboard-card-icon">📚</div>
+            <h2 class="dashboard-card-title">BOOKS</h2>
+            <p class="dashboard-card-desc">书籍记录</p>
+            <div class="dashboard-card-deco">VOL. Ⅰ</div>
           </div>
           <div class="dashboard-card" data-type="movie">
-            <div class="card-icon">🎬</div>
-            <h2 class="card-title">Movies</h2>
-            <p class="card-desc">电影记录</p>
+            <div class="dashboard-card-icon">🎬</div>
+            <h2 class="dashboard-card-title">MOVIES</h2>
+            <p class="dashboard-card-desc">电影记录</p>
+            <div class="dashboard-card-deco">VOL. Ⅱ</div>
           </div>
         </div>
       </div>
@@ -93,10 +140,11 @@
       <div id="folders-view" class="subview">
         <div class="section-header">
           <h2 id="folders-title">文件夹</h2>
-          <button class="btn btn-primary" id="btn-add-folder">+ 新建文件夹</button>
+          <button class="btn btn-ghost" id="btn-add-folder">+ 新建文件夹</button>
         </div>
         <div id="folders-list" class="cards-grid"></div>
         <div id="folders-empty" class="empty-state" style="display:none;">
+          <div class="empty-state-icon">📁</div>
           <p>暂无文件夹，点击上方按钮创建</p>
         </div>
       </div>
@@ -105,10 +153,11 @@
       <div id="entries-view" class="subview">
         <div class="section-header">
           <h2 id="entries-title">条目</h2>
-          <button class="btn btn-primary" id="btn-add-entry">+ 新建条目</button>
+          <button class="btn btn-ghost" id="btn-add-entry">+ 新建条目</button>
         </div>
         <div id="entries-list" class="cards-grid"></div>
         <div id="entries-empty" class="empty-state" style="display:none;">
+          <div class="empty-state-icon">✎</div>
           <p>暂无条目，点击上方按钮创建</p>
         </div>
       </div>
@@ -116,6 +165,7 @@
       <!-- 条目详情/编辑视图 -->
       <div id="entry-detail-view" class="subview">
         <form id="entry-form" class="entry-form">
+          <h3 class="entry-form-title" id="entry-form-title">编辑条目</h3>
           <div class="form-group">
             <label for="entry-title">标题</label>
             <input type="text" id="entry-title" placeholder="书名或电影名" required>
@@ -143,11 +193,11 @@
             <div class="image-upload-area">
               <div id="image-preview" class="image-preview" style="display:none;">
                 <img id="image-preview-img" src="" alt="预览">
-                <button type="button" class="btn btn-text btn-remove-img" id="btn-remove-img">移除</button>
+                <button type="button" class="btn-remove-img" id="btn-remove-img">移除图片</button>
               </div>
               <div id="image-upload-btn" class="upload-placeholder">
                 <input type="file" id="entry-image-input" accept="image/*">
-                <span>点击上传图片</span>
+                <span>点击上传图片（封面 / 海报 / 摘抄）</span>
               </div>
             </div>
           </div>
