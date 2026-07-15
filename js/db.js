@@ -88,10 +88,12 @@ const DB = {
     const title = entry.title || '未命名';
 
     // 纯 insert，不用 select() 避免 RLS 问题
+    // 必须包含 type 字段，因为数据库有 NOT NULL 约束
     const { error } = await this.client.from('entries').insert({
       folder_id: entry.folderId,
       user_id: userId,
-      title: title
+      title: title,
+      type: entry.type || 'book'
     });
     if (error) { console.error('createEntry insert 失败:', error); throw new Error('写入失败：' + error.message); }
 

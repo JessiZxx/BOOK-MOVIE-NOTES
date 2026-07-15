@@ -631,7 +631,7 @@ const UI = {
         catch (u) { console.warn('图片上传跳过:', u); }
       }
       const d = {
-        folderId: this.currentFolderId, title, author: this.els.entryAuthor.value.trim(),
+        folderId: this.currentFolderId, type: this.currentType || 'book', title, author: this.els.entryAuthor.value.trim(),
         rating: parseInt(this.els.entryRating.value) || 0, notes: this.els.entryNotes.value || '',
         imageUrl, coverUrl, startedDate: this.els.entryStarted.value || null, finishedDate: this.els.entryFinished.value || null
       };
