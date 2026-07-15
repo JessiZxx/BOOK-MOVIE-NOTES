@@ -4,7 +4,7 @@
    字体：汇明文朝体
    ============================================================ */
 
-@import url('https://cdn.jsdelivr.net/npm/chinese-fonts-cdn@latest/dist/huiwen-minchao/result.css');
+@import url('https://fontsapi.zeoseven.com/256/main/result.css');
 
 :root {
   --color-paper:        #f0e6d2;
@@ -19,7 +19,7 @@
   --color-gold:         #b8925a;
   --color-line:         #d4c6ae;
   --radius:             4px;
-  --font-family:        'Huiwen Minchao', 'Noto Serif SC', 'Songti SC', 'SimSun', 'STSong', serif;
+  --font-family:        'Huiwen-mincho', 'Noto Serif SC', 'Songti SC', 'SimSun', 'STSong', serif;
 }
 
 *, *::before, *::after {
