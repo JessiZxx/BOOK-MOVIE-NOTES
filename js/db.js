@@ -1,6 +1,5 @@
 /* ============================================================
    db.js - 数据库 CRUD 操作模块
-   策略：先尝试写入全部字段，失败则自动回退到基础字段
    ============================================================ */
 
 const DB = {
@@ -8,7 +7,6 @@ const DB = {
 
   init(client) { this.client = client; },
 
-  /** 获取当前用户 ID */
   async _userId() {
     const { data } = await this.client.auth.getUser();
     return data.user.id;
@@ -16,9 +14,9 @@ const DB = {
 
   /* ==================== 分类 ==================== */
   async getFolders(type) {
-    let query = this.client.from('folders').select('*').order('created_at', { ascending: false });
-    if (type) query = query.eq('type', type);
-    const { data, error } = await query;
+    let q = this.client.from('folders').select('*').order('created_at', { ascending: false });
+    if (type) q = q.eq('type', type);
+    const { data, error } = await q;
     if (error) throw error;
     return data;
   },
@@ -35,18 +33,25 @@ const DB = {
     const payload = { name, user_id: userId };
     if (type) payload.type = type;
     if (icon) payload.icon = icon;
-    // 先尝试带完整字段插入
-    let { data, error } = await this.client
-      .from('folders').insert(payload).select().single();
-    if (error) {
-      // 旧数据库可能不支持 custom/icon，回退到基础字段
-      console.warn('createFolder full insert failed, trying base:', error.message);
-      const r = await this.client
-        .from('folders').insert({ name, type: 'book', user_id: userId }).select().single();
-      if (r.error) throw r.error;
-      data = r.data;
+
+    // 尝试带完整字段
+    let { data, error } = await this.client.from('folders').insert(payload).select().single();
+    if (!error) return data;
+
+    // 回退：逐步去掉可能不存在的字段
+    console.warn('createFolder 回退:', error.message);
+    if (icon) {
+      // 去掉 icon 再试
+      const p2 = { name, user_id: userId };
+      if (type) p2.type = type;
+      const r2 = await this.client.from('folders').insert(p2).select().single();
+      if (!r2.error) return r2.data;
     }
-    return data;
+    // 最后回退：只用 name + user_id + type='book'
+    const r3 = await this.client.from('folders')
+      .insert({ name, type: 'book', user_id: userId }).select().single();
+    if (r3.error) throw r3.error;
+    return r3.data;
   },
 
   async updateFolder(id, name) {
@@ -64,21 +69,23 @@ const DB = {
   /* ==================== 条目 ==================== */
   async getEntries(folderId) {
     const { data, error } = await this.client
-      .from('entries').select('*').eq('folder_id', folderId).order('created_at', { ascending: false });
+      .from('entries').select('*').eq('folder_id', folderId)
+      .order('created_at', { ascending: false });
     if (error) throw error;
     return data;
   },
 
   async getEntryCount(folderId) {
     const { count, error } = await this.client
-      .from('entries').select('*', { count: 'exact', head: true }).eq('folder_id', folderId);
+      .from('entries').select('*', { count: 'exact', head: true })
+      .eq('folder_id', folderId);
     if (error) throw error;
     return count;
   },
 
   async createEntry(entry) {
     const userId = await this._userId();
-    // 第一步：只用核心字段插入，确保一定成功
+    // 核心字段插入 —— 带 .select('id') 直接拿回 ID，不依赖二次查询
     const core = {
       folder_id: entry.folderId,
       user_id: userId,
@@ -87,31 +94,25 @@ const DB = {
       notes: entry.notes || '',
       image_url: entry.imageUrl || ''
     };
-    const { error } = await this.client.from('entries').insert(core);
-    if (error) throw new Error('数据库写入失败：' + error.message);
+    const { data, error } = await this.client.from('entries').insert(core).select('id').single();
+    if (error) throw new Error('写入失败：' + error.message);
+    const newId = data?.id;
+    if (!newId) throw new Error('写入成功但未返回 ID');
 
-    // 第二步：查出刚插入的条目，尝试补充扩展字段
-    const { data: rows } = await this.client.from('entries')
-      .select('id').eq('folder_id', entry.folderId).eq('title', entry.title)
-      .order('created_at', { ascending: false }).limit(1);
-    const newId = rows?.[0]?.id;
-    if (newId) {
-      try {
-        await this.client.from('entries').update({
-          author: entry.author || '',
-          cover_url: entry.coverUrl || '',
-          started_date: entry.startedDate || null,
-          finished_date: entry.finishedDate || null,
-          updated_at: new Date().toISOString()
-        }).eq('id', newId);
-      } catch (e) { console.warn('扩展字段补充失败（可忽略）:', e.message); }
-    }
+    // 补充扩展字段（失败可忽略）
+    try {
+      await this.client.from('entries').update({
+        author: entry.author || '',
+        cover_url: entry.coverUrl || '',
+        started_date: entry.startedDate || null,
+        finished_date: entry.finishedDate || null,
+        updated_at: new Date().toISOString()
+      }).eq('id', newId);
+    } catch (e) { console.warn('扩展字段补充失败（可忽略）:', e.message); }
     return { id: newId };
   },
 
   async updateEntry(id, entry) {
-    const userId = await this._userId();
-    // 核心字段
     const core = {
       title: entry.title,
       rating: entry.rating || 0,
@@ -120,9 +121,8 @@ const DB = {
       updated_at: new Date().toISOString()
     };
     const { error } = await this.client.from('entries').update(core).eq('id', id);
-    if (error) throw new Error('数据库更新失败：' + error.message);
+    if (error) throw new Error('更新失败：' + error.message);
 
-    // 尝试补充扩展字段
     try {
       await this.client.from('entries').update({
         author: entry.author || '',
@@ -142,8 +142,8 @@ const DB = {
   /* ==================== 图片上传 ==================== */
   async uploadImage(file) {
     const userId = await this._userId();
-    const fileExt = file.name.split('.').pop();
-    const fileName = `${userId}/${Date.now()}.${fileExt}`;
+    const ext = file.name.split('.').pop();
+    const fileName = `${userId}/${Date.now()}.${ext}`;
     const { data, error } = await this.client.storage
       .from('entry-images').upload(fileName, file, { cacheControl: '3600', upsert: false });
     if (error) throw error;

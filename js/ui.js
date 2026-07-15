@@ -254,15 +254,33 @@ const UI = {
   },
 
   renderDashboard(cats) {
+    const totalEntries = cats.reduce((s, c) => s + (c.count || 0), 0);
+    // 仪表盘统计
+    const greeting = this.els.dashboardView.querySelector('.dashboard-greeting');
+    let statsEl = greeting.querySelector('.dashboard-stats');
+    if (totalEntries > 0) {
+      const bookCount = cats.filter(c => c.type === 'book').reduce((s, c) => s + (c.count || 0), 0);
+      const movieCount = cats.filter(c => c.type === 'movie').reduce((s, c) => s + (c.count || 0), 0);
+      const customCount = cats.filter(c => c.type !== 'book' && c.type !== 'movie').reduce((s, c) => s + (c.count || 0), 0);
+      const parts = [];
+      if (bookCount) parts.push(`📚 ${bookCount} 本书`);
+      if (movieCount) parts.push(`🎬 ${movieCount} 部电影`);
+      if (customCount) parts.push(`📂 ${customCount} 条其他`);
+      if (!statsEl) { statsEl = document.createElement('div'); statsEl.className = 'dashboard-stats'; greeting.appendChild(statsEl); }
+      statsEl.innerHTML = parts.join(' &nbsp;·&nbsp; ');
+      statsEl.style.display = '';
+    } else if (statsEl) {
+      statsEl.style.display = 'none';
+    }
+
     this.els.dashboardCategories.innerHTML = cats.map(c => {
-      const tabLabel = c.isBuiltin ? (c.type === 'book' ? 'BOOKS' : 'MOVIES') : 'CUSTOM';
-      const tabClass = c.isBuiltin ? '' : 'custom';
       const icon = c.icon || c.folderData?.icon || '📂';
+      // 标签直接用分类名
+      const tabLabel = c.name;
       return `
         <div class="category-card" data-id="${c.id}" data-type="${c.type}" data-folder="${c.folderId || ''}" data-name="${this.esc(c.name)}" data-icon="${icon}">
-          <div class="category-card-tab ${tabClass}">${tabLabel}</div>
+          <div class="category-card-tab">${this.esc(tabLabel)}</div>
           <div class="category-card-icon">${icon}</div>
-          <div class="category-card-title">${this.esc(c.name)}</div>
           <div class="category-card-count">${c.count || 0} 条记录</div>
           ${!c.isBuiltin ? `<div class="category-card-actions">
             <button class="btn-icon edit-folder" data-id="${c.id}" data-name="${this.esc(c.name)}" data-icon="${icon}" title="编辑">✎</button>
@@ -271,6 +289,12 @@ const UI = {
         </div>
       `;
     }).join('');
+
+    // 插入统计到标题下方
+    const greeting = this.els.dashboardView.querySelector('.dashboard-greeting');
+    let statsEl = greeting.querySelector('.dashboard-stats');
+    if (!statsEl) { statsEl = document.createElement('div'); greeting.appendChild(statsEl); }
+    statsEl.outerHTML = statsHtml;
 
     this.els.dashboardCategories.querySelectorAll('.category-card').forEach(card => {
       card.addEventListener('click', (e) => {
@@ -437,7 +461,7 @@ const UI = {
       this.els.entriesList.style.display = ''; this.els.entriesEmpty.style.display = 'none';
       entries.forEach(entry => {
         const coverUrl = entry.cover_url || entry.image_url || '';
-        const tabLabel = this.currentType === 'book' ? 'BOOK' : this.currentType === 'movie' ? 'FILM' : '';
+        const tabLabel = this.currentFolderName || '';
         const card = document.createElement('div');
         card.className = 'archive-card';
         card.innerHTML = `

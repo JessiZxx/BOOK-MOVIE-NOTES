@@ -476,6 +476,12 @@ img { max-width: 100%; height: auto; display: block; }
 /* 自定义分类卡片标签 */
 .category-card-tab.custom { background: var(--color-ink-faint); }
 
+/* 仪表盘统计 */
+.dashboard-stats {
+  text-align: center; font-size: 0.85rem; color: var(--color-ink-faint);
+  letter-spacing: 1px; margin-bottom: 24px; padding: 10px 0;
+}
+
 /* Toast 提示 */
 .ui-toast {
   position: fixed; bottom: 40px; left: 50%; transform: translateX(-50%) translateY(20px);
