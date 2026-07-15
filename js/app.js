@@ -4,6 +4,13 @@
 
 const App = {
   async init() {
+    // 检查 Supabase 是否加载成功
+    if (typeof supabaseClient === 'undefined') {
+      console.error('Supabase 客户端加载失败，请检查网络连接');
+      document.body.innerHTML = '<div style="padding:40px;text-align:center;font-family:sans-serif;"><h2>加载失败</h2><p>无法连接到 Supabase，请检查网络连接后刷新页面。</p></div>';
+      return;
+    }
+
     // 初始化各模块
     Auth.init(supabaseClient);
     DB.init(supabaseClient);

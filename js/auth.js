@@ -18,21 +18,34 @@ const Auth = {
 
   /** 注册 */
   async signUp(email, password) {
+    console.log('[Auth] signUp 开始:', email);
     const { data, error } = await this.client.auth.signUp({
       email,
-      password
+      password,
+      options: {
+        emailRedirectTo: window.location.origin
+      }
     });
-    if (error) return { error };
+    if (error) {
+      console.error('[Auth] signUp 失败:', error);
+      return { error };
+    }
+    console.log('[Auth] signUp 成功:', data);
     return { data };
   },
 
   /** 登录 */
   async signIn(email, password) {
+    console.log('[Auth] signIn 开始:', email);
     const { data, error } = await this.client.auth.signInWithPassword({
       email,
       password
     });
-    if (error) return { error };
+    if (error) {
+      console.error('[Auth] signIn 失败:', error);
+      return { error };
+    }
+    console.log('[Auth] signIn 成功:', data);
     return { data };
   },
 

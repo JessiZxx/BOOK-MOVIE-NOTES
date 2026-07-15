@@ -262,13 +262,44 @@ const UI = {
       return;
     }
     this.showLoading();
-    const result = await Auth.signUp(email, password);
-    this.hideLoading();
-    if (result.error) {
-      this.showAuthMessage(result.error.message || '注册失败', 'error');
-    } else {
-      this.showAuthMessage('注册成功！请查收邮箱确认链接（如已开启邮箱确认），或直接登录。', 'success');
-      setTimeout(() => this.switchAuthTab('login'), 2500);
+    try {
+      const result = await Auth.signUp(email, password);
+      this.hideLoading();
+      if (result.error) {
+        const msg = result.error.message || '注册失败';
+        // 常见错误提示优化
+        if (msg.includes('already registered') || msg.includes('already exists')) {
+          this.showAuthMessage('该邮箱已注册，请直接登录', 'error');
+        } else if (msg.includes('password')) {
+          this.showAuthMessage('密码不符合要求，请设置更复杂的密码', 'error');
+        } else if (msg.includes('rate') || msg.includes('limit')) {
+          this.showAuthMessage('操作过于频繁，请稍后再试', 'error');
+        } else if (msg.includes('network') || msg.includes('fetch')) {
+          this.showAuthMessage('网络连接失败，请检查网络后重试', 'error');
+        } else {
+          this.showAuthMessage('注册失败：' + msg, 'error');
+        }
+        console.error('注册失败详情:', result.error);
+      } else {
+        // 检查是否需要邮箱确认
+        const user = result.data?.user;
+        const session = result.data?.session;
+        if (user && !session && user.identities && user.identities.length > 0) {
+          this.showAuthMessage('注册成功！请查收邮箱确认链接，确认后即可登录。', 'success');
+        } else if (user && session) {
+          this.showAuthMessage('注册成功！正在跳转……', 'success');
+          setTimeout(() => {
+            this.showApp(email);
+          }, 800);
+        } else {
+          this.showAuthMessage('注册成功！请查收邮箱确认链接，或直接登录。', 'success');
+        }
+        setTimeout(() => this.switchAuthTab('login'), 2500);
+      }
+    } catch (err) {
+      this.hideLoading();
+      console.error('注册异常:', err);
+      this.showAuthMessage('注册时发生异常：' + (err.message || '未知错误'), 'error');
     }
   },
 
