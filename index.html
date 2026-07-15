@@ -78,11 +78,15 @@
     <header class="app-header">
       <div class="header-left">
         <button class="btn btn-icon" id="btn-back" style="display:none;">←</button>
-        <div class="header-logo">
+        <div class="header-logo" id="header-logo-click">
           <span class="header-logo-mark">Ⅲ</span>
           <span class="header-logo-text">书影</span>
         </div>
-        <h1 class="header-title" id="header-title">我的书房</h1>
+        <nav class="breadcrumb" id="breadcrumb">
+          <span class="breadcrumb-item" data-view="guide">书影</span>
+          <span class="breadcrumb-sep">/</span>
+          <span class="breadcrumb-item active" data-view="dashboard">我的书房</span>
+        </nav>
       </div>
       <div class="header-right">
         <span class="user-email" id="user-email"></span>
@@ -91,6 +95,49 @@
     </header>
 
     <main class="app-main">
+
+      <!-- ==================== 导览页 ==================== -->
+      <div id="guide-view" class="subview">
+        <div class="guide-hero">
+          <div class="guide-hero-mark">Ⅲ</div>
+          <h1 class="guide-hero-title">书影</h1>
+          <p class="guide-hero-sub">SHŪ YǏNG</p>
+          <div class="guide-hero-line"></div>
+          <p class="guide-hero-desc">
+            一座只属于你的私人书房。<br>搜索书籍与电影，自动获取封面与简介，<br>归档成档案袋，写下读后感与影评。
+          </p>
+          <button class="btn btn-primary btn-lg" id="btn-enter-dashboard">进入我的书房 →</button>
+        </div>
+
+        <div class="guide-divider">
+          <span class="guide-divider-text">使用指南</span>
+        </div>
+
+        <div class="guide-steps">
+          <div class="guide-step">
+            <div class="guide-step-icon">🔍</div>
+            <div class="guide-step-num">01</div>
+            <h3>搜索</h3>
+            <p>在搜索框中输入书名或电影名，系统自动从 Open Library 检索并显示封面与简介。</p>
+          </div>
+          <div class="guide-step">
+            <div class="guide-step-icon">📁</div>
+            <div class="guide-step-num">02</div>
+            <h3>归档</h3>
+            <p>选中搜索结果，自动创建档案袋卡片，按分类（Books / Movies）整理存放。</p>
+          </div>
+          <div class="guide-step">
+            <div class="guide-step-icon">✍️</div>
+            <div class="guide-step-num">03</div>
+            <h3>记录</h3>
+            <p>点击卡片进入编辑，填写评分、综评、阅读日期，上传手写摘抄或自定义封面。</p>
+          </div>
+        </div>
+
+        <div class="guide-footer">
+          <p>点击左上角 <strong>Ⅲ 书影</strong> 可随时回到本页</p>
+        </div>
+      </div>
 
       <!-- ==================== 仪表盘：我的书房 ==================== -->
       <div id="dashboard-view" class="subview active">
@@ -199,6 +246,13 @@
         <div class="form-group">
           <label for="folder-name">分类名称</label>
           <input type="text" id="folder-name" placeholder="例如：散文书单" required>
+        </div>
+        <div class="form-group" id="folder-type-group">
+          <label>类型</label>
+          <div class="type-toggle">
+            <button type="button" class="type-btn active" data-type="book">📚 书籍</button>
+            <button type="button" class="type-btn" data-type="movie">🎬 电影</button>
+          </div>
         </div>
         <input type="hidden" id="folder-id" value="">
         <input type="hidden" id="folder-type" value="book">

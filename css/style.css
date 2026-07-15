@@ -131,10 +131,19 @@ img { max-width: 100%; height: auto; display: block; }
   background-image: linear-gradient(to bottom, var(--color-paper), var(--color-paper-light));
 }
 .header-left { display: flex; align-items: center; gap: 10px; }
-.header-logo { display: flex; align-items: center; gap: 8px; margin-right: 16px; }
+.header-logo { display: flex; align-items: center; gap: 8px; margin-right: 16px; cursor: pointer; user-select: none; }
+.header-logo:hover { opacity: 0.8; }
 .header-logo-mark { font-size: 1.6rem; color: var(--color-vermilion); line-height: 1; }
 .header-logo-text { font-size: 1.05rem; letter-spacing: 3px; color: var(--color-ink); }
 .header-title { font-size: 1rem; font-weight: normal; letter-spacing: 2px; color: var(--color-ink-light); border-left: 1px solid var(--color-line); padding-left: 16px; margin-left: 4px; }
+
+/* 面包屑 */
+.breadcrumb { display: flex; align-items: center; gap: 6px; font-size: 0.9rem; }
+.breadcrumb-item { color: var(--color-ink-light); cursor: pointer; letter-spacing: 1px; transition: color 0.15s; }
+.breadcrumb-item:hover { color: var(--color-vermilion); }
+.breadcrumb-item.active { color: var(--color-ink); cursor: default; }
+.breadcrumb-item.active:hover { color: var(--color-ink); }
+.breadcrumb-sep { color: var(--color-ink-faint); font-size: 0.8rem; }
 .header-right { display: flex; align-items: center; gap: 16px; }
 .user-email { font-size: 0.85rem; color: var(--color-ink-faint); letter-spacing: 0.5px; }
 .btn-logout { font-size: 0.85rem; color: var(--color-ink-light); border: 1px solid var(--color-line); border-radius: var(--radius); padding: 6px 14px; background: transparent; cursor: pointer; font-family: var(--font-family); transition: all 0.15s; }
@@ -356,6 +365,91 @@ img { max-width: 100%; height: auto; display: block; }
 .modal-card h3 { font-size: 1.1rem; font-weight: normal; margin-bottom: 20px; letter-spacing: 2px; color: var(--color-ink); }
 
 /* ============================================================
+   导览页
+   ============================================================ */
+.guide-hero { text-align: center; padding: 80px 20px 50px; }
+.guide-hero-mark {
+  font-size: 5rem; color: var(--color-vermilion); line-height: 1;
+  margin-bottom: 12px; opacity: 0.9;
+  text-shadow: 2px 2px 0 rgba(139,58,50,0.1);
+}
+.guide-hero-title {
+  font-size: 3rem; font-weight: normal; letter-spacing: 14px;
+  margin-bottom: 10px; color: var(--color-ink);
+}
+.guide-hero-sub {
+  font-size: 0.85rem; color: var(--color-ink-faint);
+  letter-spacing: 6px; margin-bottom: 20px;
+  font-family: Georgia, 'Times New Roman', serif;
+}
+.guide-hero-line {
+  width: 60px; height: 2px; background: var(--color-vermilion);
+  margin: 0 auto 24px; opacity: 0.5;
+}
+.guide-hero-desc {
+  font-size: 1.05rem; color: var(--color-ink-light);
+  line-height: 2.2; max-width: 420px; margin: 0 auto 32px;
+}
+.btn-lg { padding: 14px 36px; font-size: 1.05rem; letter-spacing: 3px; }
+
+.guide-divider {
+  display: flex; align-items: center; justify-content: center;
+  max-width: 600px; margin: 0 auto 36px;
+}
+.guide-divider::before, .guide-divider::after {
+  content: ''; flex: 1; height: 1px; background: var(--color-line);
+}
+.guide-divider-text {
+  padding: 0 24px; font-size: 0.85rem; color: var(--color-ink-faint);
+  letter-spacing: 4px;
+}
+
+.guide-steps {
+  display: grid; grid-template-columns: repeat(3, 1fr);
+  gap: 28px; max-width: 780px; margin: 0 auto; padding: 0 20px 40px;
+}
+.guide-step {
+  background: var(--color-paper-light);
+  border: 1px solid var(--color-line);
+  border-radius: 6px; padding: 36px 24px 28px;
+  text-align: center; position: relative;
+  transition: all 0.3s ease;
+}
+.guide-step:hover {
+  border-color: var(--color-vermilion);
+  transform: translateY(-4px);
+  box-shadow: 0 8px 28px rgba(139,58,50,0.08);
+}
+.guide-step-icon {
+  font-size: 2.4rem; margin-bottom: 10px;
+}
+.guide-step-num {
+  font-size: 0.75rem; color: var(--color-ink-faint);
+  letter-spacing: 2px; margin-bottom: 8px;
+  font-family: Georgia, serif;
+}
+.guide-step h3 {
+  font-size: 1.1rem; font-weight: normal; letter-spacing: 3px;
+  margin-bottom: 10px; color: var(--color-ink);
+}
+.guide-step p {
+  font-size: 0.85rem; color: var(--color-ink-light);
+  line-height: 1.8;
+}
+
+.guide-footer {
+  text-align: center; padding: 20px 0 40px;
+  font-size: 0.8rem; color: var(--color-ink-faint); letter-spacing: 1px;
+}
+.guide-footer strong { color: var(--color-vermilion); font-weight: normal; }
+
+/* 类型切换 */
+.type-toggle { display: flex; gap: 8px; }
+.type-btn { flex: 1; padding: 10px 16px; border: 1px solid var(--color-line); border-radius: var(--radius); background: var(--color-paper); font-family: var(--font-family); font-size: 0.9rem; cursor: pointer; color: var(--color-ink-faint); letter-spacing: 1px; transition: all 0.15s; }
+.type-btn.active { border-color: var(--color-vermilion); color: var(--color-vermilion); background: var(--color-paper-light); }
+.type-btn:hover { border-color: var(--color-vermilion); }
+
+/* ============================================================
    加载遮罩
    ============================================================ */
 .loading-overlay { position: fixed; inset: 0; background: rgba(240,230,210,0.7); z-index: 200; display: flex; align-items: center; justify-content: center; }
@@ -392,4 +486,11 @@ img { max-width: 100%; height: auto; display: block; }
   .dashboard-greeting h1 { font-size: 1.4rem; letter-spacing: 5px; }
   .category-card-actions { opacity: 1; }
   .search-input-wrap { max-width: 100%; }
+  .guide-steps { grid-template-columns: 1fr; }
+  .guide-hero { padding: 40px 16px 30px; }
+  .guide-hero-mark { font-size: 3.4rem; }
+  .guide-hero-title { font-size: 2rem; letter-spacing: 8px; }
+  .guide-hero-desc { font-size: 0.9rem; line-height: 1.9; }
+  .guide-step { padding: 24px 16px; }
+  .breadcrumb { font-size: 0.8rem; }
 }

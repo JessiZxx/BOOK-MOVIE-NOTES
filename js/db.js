@@ -50,9 +50,17 @@ const DB = {
 
   async createFolder(name, type) {
     const { data: userData } = await this.client.auth.getUser();
-    const { data, error } = await this.client
+    // 先尝试带 type 字段插入
+    let { data, error } = await this.client
       .from('folders').insert({ name, type, user_id: userData.user.id }).select().single();
-    if (error) throw error;
+    if (error) {
+      // type 字段可能不存在，回退到不带 type 的插入
+      console.warn('createFolder with type failed, trying without type:', error.message);
+      const r = await this.client
+        .from('folders').insert({ name, user_id: userData.user.id }).select().single();
+      if (r.error) throw r.error;
+      data = r.data;
+    }
     return data;
   },
 
