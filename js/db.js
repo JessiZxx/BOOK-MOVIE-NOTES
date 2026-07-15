@@ -111,17 +111,20 @@ const DB = {
   },
 
   async updateEntry(id, entry) {
-    // 最基础字段更新
-    const core = { title: entry.title, updated_at: new Date().toISOString() };
-    const { error } = await this.client.from('entries').update(core).eq('id', id);
+    // 最基础字段更新 —— 只改 title，确保 100% 成功
+    const { error } = await this.client.from('entries').update({ title: entry.title }).eq('id', id);
     if (error) throw new Error('更新失败：' + error.message);
 
-    // 分批次补充其他字段
+    // 分批次补充其他字段，每批失败静默
     const batches = [
-      { rating: entry.rating || 0, notes: entry.notes || '' },
+      { rating: entry.rating || 0 },
+      { notes: entry.notes || '' },
       { image_url: entry.imageUrl || '' },
-      { author: entry.author || '', cover_url: entry.coverUrl || '' },
-      { started_date: entry.startedDate || null, finished_date: entry.finishedDate || null }
+      { author: entry.author || '' },
+      { cover_url: entry.coverUrl || '' },
+      { started_date: entry.startedDate || null },
+      { finished_date: entry.finishedDate || null },
+      { updated_at: new Date().toISOString() }
     ];
     for (const batch of batches) {
       try { await this.client.from('entries').update(batch).eq('id', id); }

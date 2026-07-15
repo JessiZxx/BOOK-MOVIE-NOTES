@@ -14,6 +14,8 @@ const UI = {
   searchTimer: null,
   folderIcons: {},  // 图标缓存 {folderId: iconEmoji}
   LS_ICONS_KEY: 'shuying_folder_icons',
+  audioCtx: null,
+  soundEnabled: true,
 
   els: {},
 
@@ -34,6 +36,59 @@ const UI = {
   setFolderIcon(folderId, icon) {
     this.folderIcons[folderId] = icon;
     this.saveFolderIcons();
+  },
+
+  /* ==================== 音效 ==================== */
+  _initAudio() {
+    if (!this.audioCtx) {
+      try { this.audioCtx = new (window.AudioContext || window.webkitAudioContext)(); }
+      catch (e) { this.soundEnabled = false; }
+    }
+  },
+  playSound(type) {
+    if (!this.soundEnabled) return;
+    this._initAudio();
+    if (!this.audioCtx) return;
+    const ctx = this.audioCtx;
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.connect(gain); gain.connect(ctx.destination);
+
+    if (type === 'click') {
+      // 轻微的"哒"声
+      osc.frequency.value = 700;
+      osc.type = 'sine';
+      gain.gain.setValueAtTime(0.08, ctx.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.06);
+      osc.start(ctx.currentTime);
+      osc.stop(ctx.currentTime + 0.06);
+    } else if (type === 'success') {
+      // 上升双音"叮铃"
+      osc.frequency.setValueAtTime(523, ctx.currentTime);
+      osc.frequency.setValueAtTime(659, ctx.currentTime + 0.08);
+      osc.type = 'sine';
+      gain.gain.setValueAtTime(0.1, ctx.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.2);
+      osc.start(ctx.currentTime);
+      osc.stop(ctx.currentTime + 0.2);
+    } else if (type === 'error') {
+      // 低沉的"嗡"
+      osc.frequency.value = 180;
+      osc.type = 'sawtooth';
+      gain.gain.setValueAtTime(0.06, ctx.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.2);
+      osc.start(ctx.currentTime);
+      osc.stop(ctx.currentTime + 0.2);
+    } else if (type === 'delete') {
+      // 下降短音
+      osc.frequency.setValueAtTime(440, ctx.currentTime);
+      osc.frequency.exponentialRampToValueAtTime(180, ctx.currentTime + 0.15);
+      osc.type = 'triangle';
+      gain.gain.setValueAtTime(0.08, ctx.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.15);
+      osc.start(ctx.currentTime);
+      osc.stop(ctx.currentTime + 0.15);
+    }
   },
 
   cacheDOM() {
@@ -81,14 +136,14 @@ const UI = {
     this.els.authTabs.forEach(t => t.addEventListener('click', () => this.switchAuthTab(t.dataset.tab)));
     document.querySelectorAll('.link-btn[data-switch]').forEach(b => b.addEventListener('click', () => this.switchAuthTab(b.dataset.switch)));
     this.els.btnBack.addEventListener('click', () => this.goBack());
-    this.els.headerLogo.addEventListener('click', () => this.navigateTo('guide'));
-    this.els.btnEnterDash.addEventListener('click', () => this.navigateTo('dashboard'));
-    this.els.btnAddCategory.addEventListener('click', () => this.openCategoryModal());
+    this.els.headerLogo.addEventListener('click', () => { this.playSound('click'); this.navigateTo('guide'); });
+    this.els.btnEnterDash.addEventListener('click', () => { this.playSound('click'); this.navigateTo('dashboard'); });
+    this.els.btnAddCategory.addEventListener('click', () => { this.playSound('click'); this.openCategoryModal(); });
     this.els.folderForm.addEventListener('submit', e => this.handleFolderSubmit(e));
-    this.els.btnCancelFolder.addEventListener('click', () => this.closeFolderModal());
+    this.els.btnCancelFolder.addEventListener('click', () => { this.playSound('click'); this.closeFolderModal(); });
     this.els.iconPicker.addEventListener('click', e => {
       const opt = e.target.closest('.icon-option');
-      if (opt) { this.els.iconPicker.querySelectorAll('.icon-option').forEach(o => o.classList.remove('active')); opt.classList.add('active'); this.els.selectedIcon = opt.dataset.icon; }
+      if (opt) { this.els.iconPicker.querySelectorAll('.icon-option').forEach(o => o.classList.remove('active')); opt.classList.add('active'); this.els.selectedIcon = opt.dataset.icon; this.playSound('click'); }
     });
     this.els.btnAddEntry.addEventListener('click', () => this.openEntryForm(null));
     this.els.entryForm.addEventListener('submit', e => this.handleEntrySubmit(e));
@@ -98,7 +153,7 @@ const UI = {
       }
     });
     this.els.btnDeleteEntry.addEventListener('click', () => this.handleDeleteEntry());
-    this.els.starRating.addEventListener('click', e => { if (e.target.dataset.star) this.setRating(parseInt(e.target.dataset.star)); });
+    this.els.starRating.addEventListener('click', e => { if (e.target.dataset.star) { this.setRating(parseInt(e.target.dataset.star)); this.playSound('click'); } });
     this.els.entryImageInput.addEventListener('change', e => this.handleImageSelect(e));
     this.els.btnRemoveImg.addEventListener('click', () => this.clearImage());
     this.els.searchInput.addEventListener('input', () => this.handleSearchInput());
@@ -123,6 +178,8 @@ const UI = {
     el.textContent = msg;
     document.body.appendChild(el);
     requestAnimationFrame(() => el.classList.add('show'));
+    if (type === 'error') this.playSound('error');
+    else this.playSound('success');
     setTimeout(() => { el.classList.remove('show'); setTimeout(() => el.remove(), 300); }, 2200);
   },
 
@@ -297,12 +354,11 @@ const UI = {
 
     this.els.dashboardCategories.innerHTML = cats.map(c => {
       const icon = c.icon || c.folderData?.icon || '📂';
-      // 标签直接用分类名
-      const tabLabel = c.name;
       return `
         <div class="category-card" data-id="${c.id}" data-type="${c.type}" data-folder="${c.folderId || ''}" data-name="${this.esc(c.name)}" data-icon="${icon}">
-          <div class="category-card-tab">${this.esc(tabLabel)}</div>
+          <div class="category-card-tab">${this.esc(c.name)}</div>
           <div class="category-card-icon">${icon}</div>
+          <div class="category-card-title">${this.esc(c.name)}</div>
           <div class="category-card-count">${c.count || 0} 条记录</div>
           ${!c.isBuiltin ? `<div class="category-card-actions">
             <button class="btn-icon edit-folder" data-id="${c.id}" data-name="${this.esc(c.name)}" data-icon="${icon}" title="编辑">✎</button>
