@@ -1,6 +1,6 @@
 -- ============================================================
 -- 私人书影记录 - Supabase 数据库迁移脚本
--- 请在 Supabase Dashboard → SQL Editor 中执行此脚本
+-- 请在 Supabase Dashboard → SQL Editor 中执行
 -- ============================================================
 
 -- 1. 创建 profiles 表（用户扩展信息）
@@ -10,7 +10,7 @@ CREATE TABLE IF NOT EXISTS profiles (
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
--- 2. 创建 folders 表（文件夹）
+-- 2. 创建 folders 表（文件夹 / 分类）
 CREATE TABLE IF NOT EXISTS folders (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   user_id UUID REFERENCES auth.users(id) ON DELETE CASCADE NOT NULL,
@@ -25,23 +25,29 @@ CREATE TABLE IF NOT EXISTS entries (
   folder_id UUID REFERENCES folders(id) ON DELETE CASCADE NOT NULL,
   user_id UUID REFERENCES auth.users(id) ON DELETE CASCADE NOT NULL,
   title TEXT NOT NULL,
+  author TEXT DEFAULT '',
   rating INTEGER DEFAULT 0 CHECK (rating >= 0 AND rating <= 5),
   notes TEXT DEFAULT '',
   image_url TEXT DEFAULT '',
+  cover_url TEXT DEFAULT '',
+  started_date DATE,
+  finished_date DATE,
   created_at TIMESTAMPTZ DEFAULT NOW(),
   updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
--- ============================================================
--- 4. 启用 Row Level Security
--- ============================================================
+-- 4. 补充字段（如果表已存在则添加）
+ALTER TABLE entries ADD COLUMN IF NOT EXISTS author TEXT DEFAULT '';
+ALTER TABLE entries ADD COLUMN IF NOT EXISTS cover_url TEXT DEFAULT '';
+ALTER TABLE entries ADD COLUMN IF NOT EXISTS started_date DATE;
+ALTER TABLE entries ADD COLUMN IF NOT EXISTS finished_date DATE;
+
+-- 5. 启用 Row Level Security
 ALTER TABLE profiles ENABLE ROW LEVEL SECURITY;
 ALTER TABLE folders ENABLE ROW LEVEL SECURITY;
 ALTER TABLE entries ENABLE ROW LEVEL SECURITY;
 
--- ============================================================
--- 5. profiles 表 RLS 策略
--- ============================================================
+-- 6. profiles 表 RLS 策略
 CREATE POLICY "Users can view own profile"
   ON profiles FOR SELECT
   USING (auth.uid() = id);
@@ -54,9 +60,7 @@ CREATE POLICY "Users can update own profile"
   ON profiles FOR UPDATE
   USING (auth.uid() = id);
 
--- ============================================================
--- 6. folders 表 RLS 策略
--- ============================================================
+-- 7. folders 表 RLS 策略
 CREATE POLICY "Users can view own folders"
   ON folders FOR SELECT
   USING (auth.uid() = user_id);
@@ -73,9 +77,7 @@ CREATE POLICY "Users can delete own folders"
   ON folders FOR DELETE
   USING (auth.uid() = user_id);
 
--- ============================================================
--- 7. entries 表 RLS 策略
--- ============================================================
+-- 8. entries 表 RLS 策略
 CREATE POLICY "Users can view own entries"
   ON entries FOR SELECT
   USING (auth.uid() = user_id);
@@ -92,31 +94,23 @@ CREATE POLICY "Users can delete own entries"
   ON entries FOR DELETE
   USING (auth.uid() = user_id);
 
--- ============================================================
--- 8. 创建 Storage 存储桶（图片上传）
---    请在 Supabase Dashboard → Storage 中手动创建名为 entry-images 的公开存储桶
---    然后执行以下 SQL 设置 Storage 的 RLS 策略
--- ============================================================
-
--- Storage RLS 策略（创建 bucket 后在 SQL Editor 执行）
--- 允许已认证用户上传图片
--- CREATE POLICY "Users can upload images"
---   ON storage.objects FOR INSERT
---   WITH CHECK (auth.role() = 'authenticated' AND bucket_id = 'entry-images');
+-- 9. Storage 策略（存储桶 entry-images 需手动创建）
+-- 允许认证用户上传图片
+CREATE POLICY "Users can upload images"
+  ON storage.objects FOR INSERT
+  WITH CHECK (auth.role() = 'authenticated' AND bucket_id = 'entry-images');
 
 -- 允许公开读取图片
--- CREATE POLICY "Anyone can view images"
---   ON storage.objects FOR SELECT
---   USING (bucket_id = 'entry-images');
+CREATE POLICY "Anyone can view images"
+  ON storage.objects FOR SELECT
+  USING (bucket_id = 'entry-images');
 
 -- 允许用户删除自己的图片
--- CREATE POLICY "Users can delete own images"
---   ON storage.objects FOR DELETE
---   USING (auth.uid() = owner AND bucket_id = 'entry-images');
+CREATE POLICY "Users can delete own images"
+  ON storage.objects FOR DELETE
+  USING (auth.uid() = owner AND bucket_id = 'entry-images');
 
--- ============================================================
--- 9. 自动创建 profile 的触发器（注册时自动创建）
--- ============================================================
+-- 10. 自动创建 profile 的触发器
 CREATE OR REPLACE FUNCTION public.handle_new_user()
 RETURNS TRIGGER AS $$
 BEGIN
@@ -126,9 +120,7 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 
--- 如果触发器已存在则先删除
 DROP TRIGGER IF EXISTS on_auth_user_created ON auth.users;
-
 CREATE TRIGGER on_auth_user_created
   AFTER INSERT ON auth.users
   FOR EACH ROW EXECUTE FUNCTION public.handle_new_user();
