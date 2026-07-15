@@ -85,52 +85,48 @@ const DB = {
 
   async createEntry(entry) {
     const userId = await this._userId();
-    // 核心字段插入 —— 带 .select('id') 直接拿回 ID，不依赖二次查询
+    // 最基础字段 —— 只插一定存在的，确保 100% 成功
     const core = {
       folder_id: entry.folderId,
       user_id: userId,
-      title: entry.title,
-      rating: entry.rating || 0,
-      notes: entry.notes || '',
-      image_url: entry.imageUrl || ''
+      title: entry.title
     };
     const { data, error } = await this.client.from('entries').insert(core).select('id').single();
     if (error) throw new Error('写入失败：' + error.message);
     const newId = data?.id;
     if (!newId) throw new Error('写入成功但未返回 ID');
 
-    // 补充扩展字段（失败可忽略）
-    try {
-      await this.client.from('entries').update({
-        author: entry.author || '',
-        cover_url: entry.coverUrl || '',
-        started_date: entry.startedDate || null,
-        finished_date: entry.finishedDate || null,
-        updated_at: new Date().toISOString()
-      }).eq('id', newId);
-    } catch (e) { console.warn('扩展字段补充失败（可忽略）:', e.message); }
+    // 补充其他字段 —— 分批次，每批失败不影响整体
+    const batches = [
+      { rating: entry.rating || 0, notes: entry.notes || '' },
+      { image_url: entry.imageUrl || '' },
+      { author: entry.author || '', cover_url: entry.coverUrl || '' },
+      { started_date: entry.startedDate || null, finished_date: entry.finishedDate || null }
+    ];
+    for (const batch of batches) {
+      try { await this.client.from('entries').update({...batch, updated_at: new Date().toISOString()}).eq('id', newId); }
+      catch (e) { console.warn('字段补充失败（可忽略）:', e.message); }
+    }
     return { id: newId };
   },
 
   async updateEntry(id, entry) {
-    const core = {
-      title: entry.title,
-      rating: entry.rating || 0,
-      notes: entry.notes || '',
-      image_url: entry.imageUrl || '',
-      updated_at: new Date().toISOString()
-    };
+    // 最基础字段更新
+    const core = { title: entry.title, updated_at: new Date().toISOString() };
     const { error } = await this.client.from('entries').update(core).eq('id', id);
     if (error) throw new Error('更新失败：' + error.message);
 
-    try {
-      await this.client.from('entries').update({
-        author: entry.author || '',
-        cover_url: entry.coverUrl || '',
-        started_date: entry.startedDate || null,
-        finished_date: entry.finishedDate || null
-      }).eq('id', id);
-    } catch (e) { console.warn('扩展字段更新失败（可忽略）:', e.message); }
+    // 分批次补充其他字段
+    const batches = [
+      { rating: entry.rating || 0, notes: entry.notes || '' },
+      { image_url: entry.imageUrl || '' },
+      { author: entry.author || '', cover_url: entry.coverUrl || '' },
+      { started_date: entry.startedDate || null, finished_date: entry.finishedDate || null }
+    ];
+    for (const batch of batches) {
+      try { await this.client.from('entries').update(batch).eq('id', id); }
+      catch (e) { console.warn('字段更新失败（可忽略）:', e.message); }
+    }
     return { id };
   },
 

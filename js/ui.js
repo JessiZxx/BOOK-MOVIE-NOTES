@@ -5,17 +5,36 @@
 
 const UI = {
   currentView: 'dashboard',
-  currentType: null,       // 'book' | 'movie' | 'custom'
+  currentType: null,
   currentFolderId: null,
-  currentFolderName: null,  // 当前分类名（用于面包屑）
+  currentFolderName: null,
   currentEntryId: null,
   currentImagePath: null,
   pendingImageFile: null,
   searchTimer: null,
+  folderIcons: {},  // 图标缓存 {folderId: iconEmoji}
+  LS_ICONS_KEY: 'shuying_folder_icons',
 
   els: {},
 
-  init() { this.cacheDOM(); this.bindEvents(); },
+  init() { this.cacheDOM(); this.bindEvents(); this.loadFolderIcons(); },
+
+  /* ==================== 图标本地存储兜底 ==================== */
+  loadFolderIcons() {
+    try { this.folderIcons = JSON.parse(localStorage.getItem(this.LS_ICONS_KEY) || '{}'); }
+    catch (e) { this.folderIcons = {}; }
+  },
+  saveFolderIcons() {
+    try { localStorage.setItem(this.LS_ICONS_KEY, JSON.stringify(this.folderIcons)); }
+    catch (e) {}
+  },
+  getFolderIcon(folderId, fallback) {
+    return this.folderIcons[folderId] || fallback || '📂';
+  },
+  setFolderIcon(folderId, icon) {
+    this.folderIcons[folderId] = icon;
+    this.saveFolderIcons();
+  },
 
   cacheDOM() {
     const qs = (s) => document.querySelector(s);
@@ -244,10 +263,13 @@ const UI = {
         if (f.type === 'movie' && f.name === 'Movies') return false;
         return true;
       });
-      const customCats = await Promise.all(customFolders.map(async f => ({
-        id: f.id, name: f.name, type: f.type || 'custom', icon: f.icon || '📂',
-        isBuiltin: false, folderId: f.id, count: await DB.getEntryCount(f.id), folderData: f
-      })));
+      const customCats = await Promise.all(customFolders.map(async f => {
+        const icon = f.icon || this.getFolderIcon(f.id, '📂');
+        return {
+          id: f.id, name: f.name, type: f.type || 'custom', icon,
+          isBuiltin: false, folderId: f.id, count: await DB.getEntryCount(f.id), folderData: f
+        };
+      }));
       this.renderDashboard([...builtins, ...customCats]);
     } catch (err) { console.error(err); this.toast('加载失败：' + err.message, 'error'); }
     finally { this.hideLoading(); }
@@ -337,7 +359,10 @@ const UI = {
     this.els.folderModalTitle.textContent = id ? '编辑分类' : '新建分类';
     this.els.folderName.value = name || '';
     this.els.folderId.value = id || '';
-    this.els.selectedIcon = icon || '📂';
+    // 编辑时优先用传入的 icon，其次从 localStorage 取
+    let selected = icon || '📂';
+    if (id && !icon) selected = this.getFolderIcon(id, '📂');
+    this.els.selectedIcon = selected;
     this.els.iconPicker.querySelectorAll('.icon-option').forEach(o => {
       o.classList.toggle('active', o.dataset.icon === this.els.selectedIcon);
     });
@@ -358,8 +383,15 @@ const UI = {
     if (!name) return;
     this.showLoading();
     try {
-      if (id) await DB.updateFolder(id, name);
-      else await DB.createFolder(name, 'custom', this.els.selectedIcon);
+      if (id) {
+        await DB.updateFolder(id, name);
+        // 图标存 localStorage
+        this.setFolderIcon(id, this.els.selectedIcon);
+      } else {
+        const folder = await DB.createFolder(name, 'custom', this.els.selectedIcon);
+        // 图标存 localStorage（兜底，数据库没 icon 列时也能用）
+        if (folder?.id) this.setFolderIcon(folder.id, this.els.selectedIcon);
+      }
       this.closeFolderModal();
       this.toast(id ? '分类已更新' : '分类已创建', '');
       this.loadDashboard();

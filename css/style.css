@@ -537,5 +537,7 @@ img { max-width: 100%; height: auto; display: block; }
   .guide-hero-title { font-size: 2rem; letter-spacing: 8px; }
   .guide-hero-desc { font-size: 0.9rem; line-height: 1.9; }
   .guide-step { padding: 24px 16px; }
-  .breadcrumb { font-size: 0.8rem; }
+  .breadcrumb { font-size: 0.8rem; white-space: nowrap; overflow-x: auto; flex: 1; scrollbar-width: none; -webkit-overflow-scrolling: touch; }
+  .breadcrumb::-webkit-scrollbar { display: none; }
+  .breadcrumb-item { flex-shrink: 0; }
 }
