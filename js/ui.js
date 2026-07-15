@@ -290,12 +290,6 @@ const UI = {
       `;
     }).join('');
 
-    // 插入统计到标题下方
-    const greeting = this.els.dashboardView.querySelector('.dashboard-greeting');
-    let statsEl = greeting.querySelector('.dashboard-stats');
-    if (!statsEl) { statsEl = document.createElement('div'); greeting.appendChild(statsEl); }
-    statsEl.outerHTML = statsHtml;
-
     this.els.dashboardCategories.querySelectorAll('.category-card').forEach(card => {
       card.addEventListener('click', (e) => {
         // 如果点击了操作按钮则不触发导航
