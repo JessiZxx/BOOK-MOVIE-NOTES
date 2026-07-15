@@ -85,46 +85,48 @@ const DB = {
 
   async createEntry(entry) {
     const userId = await this._userId();
-    // 最基础字段 —— 只插一定存在的，确保 100% 成功
-    const core = {
+    const title = entry.title || '未命名';
+
+    // 纯 insert，不用 select() 避免 RLS 问题
+    const { error } = await this.client.from('entries').insert({
       folder_id: entry.folderId,
       user_id: userId,
-      title: entry.title
-    };
-    const { data, error } = await this.client.from('entries').insert(core).select('id').single();
-    if (error) throw new Error('写入失败：' + error.message);
-    const newId = data?.id;
-    if (!newId) throw new Error('写入成功但未返回 ID');
+      title: title
+    });
+    if (error) { console.error('createEntry insert 失败:', error); throw new Error('写入失败：' + error.message); }
 
-    // 补充其他字段 —— 分批次，每批失败不影响整体
+    // 查回刚插入的条目
+    const { data: rows, error: selError } = await this.client.from('entries')
+      .select('id').eq('folder_id', entry.folderId).eq('title', title)
+      .order('created_at', { ascending: false }).limit(1);
+    if (selError) { console.error('createEntry select 失败:', selError); throw new Error('查询失败：' + selError.message); }
+    const newId = rows?.[0]?.id;
+    if (!newId) throw new Error('写入成功但未找到记录');
+
+    // 补充其他字段（分批次，每批失败静默）
     const batches = [
-      { rating: entry.rating || 0, notes: entry.notes || '' },
-      { image_url: entry.imageUrl || '' },
-      { author: entry.author || '', cover_url: entry.coverUrl || '' },
+      { rating: entry.rating || 0 }, { notes: entry.notes || '' },
+      { image_url: entry.imageUrl || '' }, { author: entry.author || '' },
+      { cover_url: entry.coverUrl || '' },
       { started_date: entry.startedDate || null, finished_date: entry.finishedDate || null }
     ];
     for (const batch of batches) {
-      try { await this.client.from('entries').update({...batch, updated_at: new Date().toISOString()}).eq('id', newId); }
+      try { await this.client.from('entries').update(batch).eq('id', newId); }
       catch (e) { console.warn('字段补充失败（可忽略）:', e.message); }
     }
     return { id: newId };
   },
 
   async updateEntry(id, entry) {
-    // 最基础字段更新 —— 只改 title，确保 100% 成功
+    // 只改 title，确保 100% 成功
     const { error } = await this.client.from('entries').update({ title: entry.title }).eq('id', id);
     if (error) throw new Error('更新失败：' + error.message);
 
-    // 分批次补充其他字段，每批失败静默
     const batches = [
-      { rating: entry.rating || 0 },
-      { notes: entry.notes || '' },
-      { image_url: entry.imageUrl || '' },
-      { author: entry.author || '' },
+      { rating: entry.rating || 0 }, { notes: entry.notes || '' },
+      { image_url: entry.imageUrl || '' }, { author: entry.author || '' },
       { cover_url: entry.coverUrl || '' },
-      { started_date: entry.startedDate || null },
-      { finished_date: entry.finishedDate || null },
-      { updated_at: new Date().toISOString() }
+      { started_date: entry.startedDate || null, finished_date: entry.finishedDate || null }
     ];
     for (const batch of batches) {
       try { await this.client.from('entries').update(batch).eq('id', id); }

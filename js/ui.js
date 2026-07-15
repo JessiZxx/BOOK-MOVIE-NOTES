@@ -638,7 +638,7 @@ const UI = {
       if (this.currentEntryId) { await DB.updateEntry(this.currentEntryId, d); this.toast('已保存', ''); }
       else { await DB.createEntry(d); this.toast('条目已创建', ''); }
       this.navigateTo('entries', { folderId: this.currentFolderId, type: this.currentType, name: this.currentFolderName });
-    } catch (err) { this.toast('保存失败：' + err.message, 'error'); }
+    } catch (err) { console.error('保存条目失败:', err); this.toast('保存失败：' + err.message, 'error'); }
     finally { this.hideLoading(); }
   },
 
