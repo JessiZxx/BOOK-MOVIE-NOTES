@@ -84,25 +84,30 @@ const DB = {
   },
 
   async createEntry(entry) {
+    console.log('[DB] createEntry 被调用, v=3', entry);
     const userId = await this._userId();
     const title = entry.title || '未命名';
 
     // 硬编码 type='book'，确保数据库 NOT NULL 约束一定满足
-    // 如果数据库有 CHECK 约束限制 type 只能是 'book'/'movie'，这里会失败，但至少不是 null 错误
     let insertPayload = {
       folder_id: entry.folderId,
       user_id: userId,
       title: title,
       type: 'book'
     };
+    console.log('[DB] insertPayload:', insertPayload);
 
     let { error } = await this.client.from('entries').insert(insertPayload);
     if (error) {
-      console.error('createEntry 写入失败:', error);
-      // 如果 type 列不存在，回退到不带 type 的插入
+      console.error('[DB] 第一次 insert 失败:', error);
+      // 如果带 type 失败，回退到不带 type 的插入
       const fallback = { folder_id: entry.folderId, user_id: userId, title: title };
+      console.log('[DB] 尝试回退 insert:', fallback);
       const r2 = await this.client.from('entries').insert(fallback);
-      if (r2.error) { console.error('createEntry 回退也失败:', r2.error); throw new Error('写入失败：' + r2.error.message); }
+      if (r2.error) { console.error('[DB] 回退也失败:', r2.error); throw new Error('写入失败：' + r2.error.message); }
+      console.log('[DB] 回退成功');
+    } else {
+      console.log('[DB] 第一次 insert 成功');
     }
 
     // 查回刚插入的条目

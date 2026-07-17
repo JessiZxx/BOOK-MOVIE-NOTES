@@ -623,6 +623,7 @@ const UI = {
     e.preventDefault();
     const title = this.els.entryTitle.value.trim();
     if (!title) return;
+    console.log('[UI] handleEntrySubmit, currentEntryId:', this.currentEntryId, 'currentType:', this.currentType, 'currentFolderId:', this.currentFolderId);
     this.showLoading();
     try {
       let coverUrl = this.currentImagePath || '', imageUrl = this.currentImagePath || '';
@@ -635,6 +636,7 @@ const UI = {
         rating: parseInt(this.els.entryRating.value) || 0, notes: this.els.entryNotes.value || '',
         imageUrl, coverUrl, startedDate: this.els.entryStarted.value || null, finishedDate: this.els.entryFinished.value || null
       };
+      console.log('[UI] 准备保存:', d);
       if (this.currentEntryId) { await DB.updateEntry(this.currentEntryId, d); this.toast('已保存', ''); }
       else { await DB.createEntry(d); this.toast('条目已创建', ''); }
       this.navigateTo('entries', { folderId: this.currentFolderId, type: this.currentType, name: this.currentFolderName });
