@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>书影 &middot; 私人书影记录</title>
-  <link rel="stylesheet" href="css/style.css?v=4">
+  <link rel="stylesheet" href="css/style.css?v=5">
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
 </head>
 <body>
@@ -230,6 +230,19 @@
             <button type="submit" class="btn btn-primary">保存</button>
           </div>
         </form>
+
+        <!-- 笔记页区域 -->
+        <div class="entry-pages-section" id="entry-pages-section">
+          <div class="section-header">
+            <h2>笔记页</h2>
+            <button class="btn btn-ghost" id="btn-add-page">+ 添加笔记</button>
+          </div>
+          <div id="entry-pages-list" class="entry-pages-grid"></div>
+          <div id="entry-pages-empty" class="empty-state" style="display:none;">
+            <div class="empty-state-icon">📝</div>
+            <p>暂无笔记，点击上方按钮添加</p>
+          </div>
+        </div>
       </div>
 
     </main>
@@ -271,14 +284,47 @@
     </div>
   </div>
 
+  <!-- 笔记页模态框 -->
+  <div id="page-modal" class="modal">
+    <div class="modal-overlay"></div>
+    <div class="modal-card modal-card--wide">
+      <h3 id="page-modal-title">新建笔记</h3>
+      <form id="page-form">
+        <div class="form-group">
+          <label for="page-content">笔记内容</label>
+          <textarea id="page-content" rows="8" placeholder="写下你的笔记、摘抄或感想……"></textarea>
+        </div>
+        <div class="form-group">
+          <label>笔记照片</label>
+          <div class="image-upload-area">
+            <div id="page-image-preview" class="image-preview" style="display:none;">
+              <img id="page-image-preview-img" src="" alt="预览">
+              <button type="button" class="btn-remove-img" id="btn-remove-page-img">移除照片</button>
+            </div>
+            <div id="page-image-upload-btn" class="upload-placeholder">
+              <input type="file" id="page-image-input" accept="image/*">
+              <span>点击上传笔记照片</span>
+            </div>
+          </div>
+        </div>
+        <input type="hidden" id="page-id" value="">
+        <div class="form-actions">
+          <button type="button" class="btn btn-danger" id="btn-delete-page" style="display:none;">删除</button>
+          <button type="button" class="btn btn-text" id="btn-cancel-page">取消</button>
+          <button type="submit" class="btn btn-primary">保存</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
   <!-- 加载遮罩 -->
   <div id="loading-overlay" class="loading-overlay" style="display:none;"><div class="spinner"></div></div>
 
   <!-- ==================== JS 模块 ==================== -->
-  <script src="js/supabase.js?v=4"></script>
-  <script src="js/auth.js?v=4"></script>
-  <script src="js/db.js?v=4"></script>
-  <script src="js/ui.js?v=4"></script>
-  <script src="js/app.js?v=4"></script>
+  <script src="js/supabase.js?v=5"></script>
+  <script src="js/auth.js?v=5"></script>
+  <script src="js/db.js?v=5"></script>
+  <script src="js/ui.js?v=5"></script>
+  <script src="js/app.js?v=5"></script>
 </body>
 </html>

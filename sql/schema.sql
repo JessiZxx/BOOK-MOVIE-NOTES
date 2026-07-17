@@ -53,10 +53,23 @@ ALTER TABLE entries ADD COLUMN IF NOT EXISTS cover_url TEXT DEFAULT '';
 ALTER TABLE entries ADD COLUMN IF NOT EXISTS started_date DATE;
 ALTER TABLE entries ADD COLUMN IF NOT EXISTS finished_date DATE;
 
+-- 4b. 创建 entry_pages 表（条目内的笔记页）
+CREATE TABLE IF NOT EXISTS entry_pages (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  entry_id UUID REFERENCES entries(id) ON DELETE CASCADE NOT NULL,
+  user_id UUID REFERENCES auth.users(id) ON DELETE CASCADE NOT NULL,
+  content TEXT DEFAULT '',
+  image_url TEXT DEFAULT '',
+  page_order INTEGER DEFAULT 0,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
 -- 5. 启用 Row Level Security
 ALTER TABLE profiles ENABLE ROW LEVEL SECURITY;
 ALTER TABLE folders ENABLE ROW LEVEL SECURITY;
 ALTER TABLE entries ENABLE ROW LEVEL SECURITY;
+ALTER TABLE entry_pages ENABLE ROW LEVEL SECURITY;
 
 -- 6. profiles 表 RLS 策略
 DROP POLICY IF EXISTS "Users can view own profile" ON profiles;
@@ -116,7 +129,28 @@ CREATE POLICY "Users can delete own entries"
   ON entries FOR DELETE
   USING (auth.uid() = user_id);
 
--- 9. Storage 策略（存储桶 entry-images 需手动创建）
+-- 9. entry_pages 表 RLS 策略
+DROP POLICY IF EXISTS "Users can view own entry_pages" ON entry_pages;
+CREATE POLICY "Users can view own entry_pages"
+  ON entry_pages FOR SELECT
+  USING (auth.uid() = user_id);
+
+DROP POLICY IF EXISTS "Users can create own entry_pages" ON entry_pages;
+CREATE POLICY "Users can create own entry_pages"
+  ON entry_pages FOR INSERT
+  WITH CHECK (auth.uid() = user_id);
+
+DROP POLICY IF EXISTS "Users can update own entry_pages" ON entry_pages;
+CREATE POLICY "Users can update own entry_pages"
+  ON entry_pages FOR UPDATE
+  USING (auth.uid() = user_id);
+
+DROP POLICY IF EXISTS "Users can delete own entry_pages" ON entry_pages;
+CREATE POLICY "Users can delete own entry_pages"
+  ON entry_pages FOR DELETE
+  USING (auth.uid() = user_id);
+
+-- 10. Storage 策略（存储桶 entry-images 需手动创建）
 DROP POLICY IF EXISTS "Users can upload images" ON storage.objects;
 CREATE POLICY "Users can upload images"
   ON storage.objects FOR INSERT

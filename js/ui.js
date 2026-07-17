@@ -1,6 +1,7 @@
 /* ============================================================
    ui.js - UI 渲染与事件处理
    交互：面包屑导航 / 导览页 / 自定义分类 / 档案袋卡片
+   笔记页：条目内子页面，存放笔记文字与照片
    ============================================================ */
 
 const UI = {
@@ -16,6 +17,8 @@ const UI = {
   LS_ICONS_KEY: 'shuying_folder_icons',
   audioCtx: null,
   soundEnabled: true,
+  pendingPageImage: null,
+  currentPageImageUrl: null,
 
   els: {},
 
@@ -126,6 +129,22 @@ const UI = {
       iconPicker: qs('#icon-picker'), selectedIcon: '📂',
       btnCancelFolder: qs('#btn-cancel-folder'),
       loadingOverlay: qs('#loading-overlay'),
+
+      // 笔记页
+      entryPagesSection: qs('#entry-pages-section'),
+      entryPagesList: qs('#entry-pages-list'),
+      entryPagesEmpty: qs('#entry-pages-empty'),
+      btnAddPage: qs('#btn-add-page'),
+      pageModal: qs('#page-modal'), pageForm: qs('#page-form'),
+      pageModalTitle: qs('#page-modal-title'),
+      pageContent: qs('#page-content'), pageId: qs('#page-id'),
+      pageImagePreview: qs('#page-image-preview'),
+      pageImagePreviewImg: qs('#page-image-preview-img'),
+      pageImageUploadBtn: qs('#page-image-upload-btn'),
+      pageImageInput: qs('#page-image-input'),
+      btnRemovePageImg: qs('#btn-remove-page-img'),
+      btnDeletePage: qs('#btn-delete-page'),
+      btnCancelPage: qs('#btn-cancel-page'),
     };
   },
 
@@ -160,6 +179,14 @@ const UI = {
     this.els.searchInput.addEventListener('focus', () => { if (this.els.searchInput.value.trim().length >= 2) this.handleSearchInput(); });
     document.addEventListener('click', e => { if (!e.target.closest('.search-input-wrap')) this.els.searchResults.classList.remove('active'); });
     document.querySelector('#folder-modal .modal-overlay').addEventListener('click', () => this.closeFolderModal());
+    document.querySelector('#page-modal .modal-overlay').addEventListener('click', () => this.closePageModal());
+    // 笔记页事件
+    this.els.btnAddPage.addEventListener('click', () => this.openPageModal(null));
+    this.els.pageForm.addEventListener('submit', e => { e.preventDefault(); this.handlePageSubmit(); });
+    this.els.btnCancelPage.addEventListener('click', () => this.closePageModal());
+    this.els.btnDeletePage.addEventListener('click', () => this.handleDeletePage());
+    this.els.pageImageInput.addEventListener('change', e => this.handlePageImageSelect(e));
+    this.els.btnRemovePageImg.addEventListener('click', () => this.clearPageImage());
     // 面包屑点击
     this.els.breadcrumb.addEventListener('click', e => {
       const item = e.target.closest('.breadcrumb-item');
@@ -572,6 +599,7 @@ const UI = {
   async loadEntryForm(entryId) {
     this.resetEntryForm();
     if (entryId) {
+      this.currentEntryId = entryId;
       this.els.entryFormTitle.textContent = '编辑条目'; this.els.btnDeleteEntry.style.display = '';
       this.showLoading();
       try {
@@ -589,9 +617,10 @@ const UI = {
           if (imgUrl) { this.currentImagePath = imgUrl; this.els.imagePreview.style.display = 'block'; this.els.imagePreviewImg.src = imgUrl; this.els.imageUploadBtn.style.display = 'none'; }
           else { this.showTextCoverPreview(data.title); }
         }
+        this.loadEntryPages();
       } catch (err) { this.toast('加载失败：' + err.message, 'error'); }
       finally { this.hideLoading(); }
-    } else { this.els.entryFormTitle.textContent = '新建条目'; this.showTextCoverPreview(''); }
+    } else { this.els.entryFormTitle.textContent = '新建条目'; this.showTextCoverPreview(''); this.renderEntryPages([]); }
   },
 
   showTextCoverPreview(title) {
@@ -651,6 +680,148 @@ const UI = {
     try { await DB.deleteEntry(this.currentEntryId); this.toast('已删除', ''); this.navigateTo('entries', { folderId: this.currentFolderId, type: this.currentType, name: this.currentFolderName }); }
     catch (err) { this.toast('删除失败：' + err.message, 'error'); }
     finally { this.hideLoading(); }
+  },
+
+  /* ==================== 笔记页 ==================== */
+  async loadEntryPages() {
+    if (!this.currentEntryId) { this.renderEntryPages([]); return; }
+    try {
+      const pages = await DB.getEntryPages(this.currentEntryId);
+      this.renderEntryPages(pages);
+    } catch (err) { this.renderEntryPages([]); }
+  },
+
+  renderEntryPages(pages) {
+    this.els.entryPagesList.innerHTML = '';
+    if (!pages || pages.length === 0) {
+      this.els.entryPagesList.style.display = 'none';
+      this.els.entryPagesEmpty.style.display = 'block';
+      return;
+    }
+    this.els.entryPagesList.style.display = '';
+    this.els.entryPagesEmpty.style.display = 'none';
+    pages.forEach(p => {
+      const card = document.createElement('div');
+      card.className = 'page-card';
+      const excerpt = (p.content || '').replace(/\n/g, ' ').slice(0, 60) || '点击查看笔记';
+      card.innerHTML = `
+        <div class="page-card-preview">
+          ${p.image_url ? `<img src="${this.esc(p.image_url)}" alt="" loading="lazy">` : `<div class="page-card-text">${this.esc(excerpt)}</div>`}
+        </div>
+        <div class="page-card-footer">
+          <span class="page-card-date">${this.fmtDate(p.created_at)}</span>
+          <span class="page-card-label">${p.image_url ? '含照片' : '纯文字'}</span>
+        </div>
+      `;
+      card.addEventListener('click', () => this.openPageModal(p.id));
+      this.els.entryPagesList.appendChild(card);
+    });
+  },
+
+  openPageModal(pageId) {
+    this.resetPageForm();
+    this.els.pageModal.classList.add('active');
+    if (pageId) {
+      this.els.pageModalTitle.textContent = '编辑笔记';
+      this.els.pageId.value = pageId;
+      this.els.btnDeletePage.style.display = '';
+      this.showLoading();
+      supabaseClient.from('entry_pages').select('*').eq('id', pageId).single()
+        .then(({ data, error }) => {
+          this.hideLoading();
+          if (error) { this.toast('加载失败', 'error'); this.closePageModal(); return; }
+          if (data) {
+            this.els.pageContent.value = data.content || '';
+            this.currentPageImageUrl = data.image_url || '';
+            if (data.image_url) {
+              this.els.pageImagePreview.style.display = 'block';
+              this.els.pageImagePreviewImg.src = data.image_url;
+              this.els.pageImageUploadBtn.style.display = 'none';
+            }
+          }
+        });
+    } else {
+      this.els.pageModalTitle.textContent = '新建笔记';
+      this.els.pageId.value = '';
+      this.els.btnDeletePage.style.display = 'none';
+      this.els.pageContent.focus();
+    }
+  },
+
+  closePageModal() {
+    this.els.pageModal.classList.remove('active');
+    this.resetPageForm();
+  },
+
+  resetPageForm() {
+    this.els.pageForm.reset();
+    this.els.pageId.value = '';
+    this.pendingPageImage = null;
+    this.currentPageImageUrl = null;
+    this.els.pageImagePreview.style.display = 'none';
+    this.els.pageImagePreviewImg.src = '';
+    this.els.pageImageUploadBtn.style.display = '';
+    this.els.pageImageInput.value = '';
+    this.els.btnDeletePage.style.display = 'none';
+  },
+
+  async handlePageSubmit() {
+    const content = this.els.pageContent.value.trim();
+    const pageId = this.els.pageId.value;
+    this.showLoading();
+    try {
+      let imageUrl = this.currentPageImageUrl || '';
+      if (this.pendingPageImage) {
+        try { const r = await DB.uploadImage(this.pendingPageImage); imageUrl = DB.getImageUrl(r.path); }
+        catch (u) { console.warn('笔记照片上传跳过:', u); }
+      }
+      if (pageId) {
+        await DB.updateEntryPage(pageId, { content, image_url: imageUrl });
+        this.toast('笔记已更新', '');
+      } else {
+        await DB.createEntryPage(this.currentEntryId, content, imageUrl);
+        this.toast('笔记已创建', '');
+      }
+      this.closePageModal();
+      this.loadEntryPages();
+    } catch (err) { this.toast('保存失败：' + err.message, 'error'); }
+    finally { this.hideLoading(); }
+  },
+
+  async handleDeletePage() {
+    const pageId = this.els.pageId.value;
+    if (!pageId || !confirm('确定删除这条笔记？')) return;
+    this.showLoading();
+    try {
+      await DB.deleteEntryPage(pageId);
+      this.toast('笔记已删除', '');
+      this.closePageModal();
+      this.loadEntryPages();
+    } catch (err) { this.toast('删除失败：' + err.message, 'error'); }
+    finally { this.hideLoading(); }
+  },
+
+  handlePageImageSelect(e) {
+    const file = e.target.files[0]; if (!file) return;
+    if (!file.type.startsWith('image/')) { this.toast('请选择图片文件', 'error'); return; }
+    this.pendingPageImage = file;
+    this.currentPageImageUrl = null;
+    const reader = new FileReader();
+    reader.onload = ev => {
+      this.els.pageImagePreview.style.display = 'block';
+      this.els.pageImagePreviewImg.src = ev.target.result;
+      this.els.pageImageUploadBtn.style.display = 'none';
+    };
+    reader.readAsDataURL(file);
+  },
+
+  clearPageImage() {
+    this.pendingPageImage = null;
+    this.currentPageImageUrl = null;
+    this.els.pageImagePreview.style.display = 'none';
+    this.els.pageImagePreviewImg.src = '';
+    this.els.pageImageUploadBtn.style.display = '';
+    this.els.pageImageInput.value = '';
   },
 
   /* ==================== 星级 ==================== */

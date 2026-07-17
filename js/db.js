@@ -155,6 +155,43 @@ const DB = {
     if (error) throw error;
   },
 
+  /* ==================== 笔记页 ==================== */
+  async getEntryPages(entryId) {
+    const { data, error } = await this.client
+      .from('entry_pages').select('*').eq('entry_id', entryId)
+      .order('page_order', { ascending: true }).order('created_at', { ascending: true });
+    if (error) throw error;
+    return data;
+  },
+
+  async createEntryPage(entryId, content, imageUrl) {
+    const userId = await this._userId();
+    const { data, error } = await this.client
+      .from('entry_pages').insert({
+        entry_id: entryId, user_id: userId,
+        content: content || '', image_url: imageUrl || '',
+        page_order: 0
+      }).select().single();
+    if (error) throw error;
+    return data;
+  },
+
+  async updateEntryPage(id, data) {
+    const payload = {};
+    if (data.content !== undefined) payload.content = data.content;
+    if (data.image_url !== undefined) payload.image_url = data.image_url;
+    payload.updated_at = new Date().toISOString();
+    const { error } = await this.client
+      .from('entry_pages').update(payload).eq('id', id);
+    if (error) throw error;
+  },
+
+  async deleteEntryPage(id) {
+    const { error } = await this.client
+      .from('entry_pages').delete().eq('id', id);
+    if (error) throw error;
+  },
+
   /* ==================== 图片上传 ==================== */
   async uploadImage(file) {
     const userId = await this._userId();

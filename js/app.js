@@ -4,7 +4,7 @@
 
 const App = {
   async init() {
-    console.log('[书影] 版本 v=4 已加载');
+    console.log('[书影] 版本 v=5 已加载');
     // 检查 Supabase 是否加载成功
     if (typeof supabaseClient === 'undefined') {
       console.error('Supabase 客户端加载失败，请检查网络连接');
