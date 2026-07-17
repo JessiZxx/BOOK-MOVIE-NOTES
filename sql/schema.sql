@@ -45,6 +45,9 @@ CREATE TABLE IF NOT EXISTS entries (
 
 -- 4. 补充字段（如果表已存在则添加）
 ALTER TABLE entries ADD COLUMN IF NOT EXISTS type TEXT;
+-- 兼容：如果 type 列已有 NOT NULL 约束，添加默认值并放宽约束
+ALTER TABLE entries ALTER COLUMN type SET DEFAULT 'book';
+ALTER TABLE entries ALTER COLUMN type DROP NOT NULL;
 ALTER TABLE entries ADD COLUMN IF NOT EXISTS author TEXT DEFAULT '';
 ALTER TABLE entries ADD COLUMN IF NOT EXISTS cover_url TEXT DEFAULT '';
 ALTER TABLE entries ADD COLUMN IF NOT EXISTS started_date DATE;
