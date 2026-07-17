@@ -31,6 +31,7 @@ CREATE TABLE IF NOT EXISTS entries (
   folder_id UUID REFERENCES folders(id) ON DELETE CASCADE NOT NULL,
   user_id UUID REFERENCES auth.users(id) ON DELETE CASCADE NOT NULL,
   title TEXT NOT NULL,
+  type TEXT DEFAULT 'book',
   author TEXT DEFAULT '',
   rating INTEGER DEFAULT 0 CHECK (rating >= 0 AND rating <= 5),
   notes TEXT DEFAULT '',
@@ -43,6 +44,7 @@ CREATE TABLE IF NOT EXISTS entries (
 );
 
 -- 4. 补充字段（如果表已存在则添加）
+ALTER TABLE entries ADD COLUMN IF NOT EXISTS type TEXT;
 ALTER TABLE entries ADD COLUMN IF NOT EXISTS author TEXT DEFAULT '';
 ALTER TABLE entries ADD COLUMN IF NOT EXISTS cover_url TEXT DEFAULT '';
 ALTER TABLE entries ADD COLUMN IF NOT EXISTS started_date DATE;
